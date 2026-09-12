@@ -31,6 +31,25 @@ groups:
             are failing with a server error.
           runbook: runbooks/high-error-rate.md
 
+      # Added after INC-001. Both services looked healthy on every existing panel
+      # while orders abandoned calls inventory was answering successfully, because
+      # nothing measured the outcome of a call from the caller's side.
+      - alert: UpstreamTimeouts
+        expr: >-
+          sum by (service, upstream) (rate(upstream_calls_total{outcome="timeout"}[5m]))
+          > 0
+        for: 2m
+        labels:
+          severity: sev2
+        annotations:
+          summary: "{{ $labels.service }} is timing out calls to {{ $labels.upstream }}"
+          description: >-
+            {{ $labels.service }} has been abandoning calls to {{ $labels.upstream }}
+            for two minutes. Check whether {{ $labels.upstream }} is actually slow
+            (its own p95) before escalating to its owners - a timeout budget set below
+            client-observed latency looks identical from here.
+          runbook: runbooks/upstream-timeouts.md
+
       - alert: HighLatencyP95
         expr: >-
           histogram_quantile(

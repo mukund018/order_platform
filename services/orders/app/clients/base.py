@@ -12,6 +12,7 @@ from typing import Any, NoReturn
 import httpx
 from pydantic import BaseModel, ValidationError
 
+from app.metrics import UPSTREAM_CALLS
 from common.errors import AppError, UpstreamError, UpstreamTimeoutError
 from common.logging import get_logger
 from common.request_id import httpx_event_hooks
@@ -48,6 +49,9 @@ def call(
     try:
         response = client.request(method, path, json=json)
     except httpx.TimeoutException as exc:
+        # Counted as well as logged. INC-001 was a timeout the logs recorded perfectly
+        # and no metric could see, so the dashboards stayed green through it.
+        UPSTREAM_CALLS.labels(upstream=upstream, outcome="timeout").inc()
         log.error(
             "upstream_timeout",
             upstream=upstream,
@@ -61,6 +65,7 @@ def call(
             details={"upstream": upstream, "path": path},
         ) from exc
     except httpx.RequestError as exc:
+        UPSTREAM_CALLS.labels(upstream=upstream, outcome="unreachable").inc()
         log.error(
             "upstream_unreachable",
             upstream=upstream,
@@ -73,6 +78,7 @@ def call(
             f"{upstream} is unreachable", details={"upstream": upstream, "path": path}
         ) from exc
 
+    UPSTREAM_CALLS.labels(upstream=upstream, outcome="ok" if response.is_success else "error").inc()
     level = log.info if response.is_success else log.warning
     level(
         "upstream_call",

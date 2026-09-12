@@ -231,3 +231,93 @@ variables, and it is how most of the interesting failures get produced:
 | `GATEWAY_FAILURE_RATE` | Probability of a decline (default 0.05) |
 | `GATEWAY_TIMEOUT_RATE` | Probability of hanging for `GATEWAY_TIMEOUT_SLEEP_S`, which is longer than the caller's timeout |
 | `GATEWAY_SEED` | Fixes the random sequence so behaviour is reproducible |
+
+---
+
+## support-service — :8004
+
+Read-only. It owns no data: it reads the shared log volume, calls the other services'
+`/ready` endpoints, and reads `incidents/` off disk. Same error envelope and same
+`X-Request-ID` header as everything else.
+
+Through the console's nginx these are reachable at `/api/support/...` on port 5173.
+
+### `GET /support/overview`
+
+Health of every service in one call, probed in parallel, plus a count of recent errors.
+
+```json
+{
+  "generated_at": "2026-09-12T08:37:02Z",
+  "services": [
+    {"name": "orders", "url": "http://orders:8001", "live": true, "ready": true,
+     "detail": null, "latency_ms": 13.0, "checks": {"database": "ok", "broker": "ok"}}
+  ],
+  "errors_last_15m": 487,
+  "log_lines_read": 17719,
+  "malformed_lines": 0
+}
+```
+
+`live` and `ready` are deliberately separate. A service that answers `/ready` with a 503 is
+`live: true, ready: false` — the process is up and refusing traffic, which is a different
+problem from a process that is gone, and needs a different response.
+
+### `GET /support/trace/{request_id}`
+
+Every log line carrying that request id, across every service, in time order.
+
+```json
+{
+  "request_id": "6a21bb73aa6e463db64ad20f34c818cd",
+  "services": ["inventory", "orders", "payments", "worker"],
+  "span_ms": 1732.73,
+  "order_ids": ["680ad39d-3511-49b7-b054-429471935fc4"],
+  "steps": [
+    {"timestamp": "2026-09-12T08:37:11.358Z", "service": "payments",
+     "level": "info", "event": "payment_settled", "gap_ms": 857.52,
+     "duration_ms": null, "status_code": null, "order_id": "680ad39d-...",
+     "fields": {"provider_ref": "PAY-556b5b172f56"}}
+  ]
+}
+```
+
+`gap_ms` is the point of the endpoint: milliseconds since the previous line. A request that
+took two seconds did not spend them evenly, and the largest gap names the step that owns
+the problem.
+
+Fields the response models name — service, level, event, `request_id`, `duration_ms`,
+`status_code`, `order_id` — are lifted out. Everything else the service chose to log for
+that event stays in `fields` verbatim, because the interesting key is different every time
+and a fixed schema would throw it away.
+
+404 `NOT_FOUND` if no line carries that id.
+
+### `GET /support/errors?since=15m`
+
+Warning-and-above lines grouped by `(service, error_code)`, most frequent first, each with
+its most recent example. `since` accepts `30s`, `15m`, `2h`, `1d`; anything else is a 422
+`VALIDATION_ERROR`.
+
+A line with no explicit `error_code` is grouped under its `event` name — unless that event
+is prose from a third-party library, in which case it is bucketed as `UNSTRUCTURED`. Celery
+writes whole sentences into `event` and varies the retry delay inside them, so using them
+as keys gives one group per line and a useless board.
+
+### `GET /support/slow?since=15m&top=10`
+
+The slowest completed requests in a window, by the `duration_ms` on their access-log line.
+Only `http_request` events are candidates — a slow cache read is not a slow request.
+
+### `GET /support/order/{order_id}`
+
+Every log line that mentions an order id anywhere, including nested inside a `details`
+object, which is where it usually hides on the failure paths. Returns the lines plus the
+distinct `request_ids` involved — more than one usually means a retry, or the expiry job
+arriving while the order was still in flight. 404 if nothing mentions it.
+
+### `GET /support/incidents`
+
+The Phase 3 board: the public half of each fault definition, joined to any row already
+written into `incidents/INDEX.md`. It never reads the sealed `spoiler` field — the console
+is something you look at *during* an investigation.

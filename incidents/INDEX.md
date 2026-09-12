@@ -4,12 +4,13 @@ Phase 3 log. One row per incident, filled in when the RCA is scored.
 
 | ID | Title | Sev | Category | TTA (min) | TTM (min) | Hints | RCA score |
 |---|---|---|---|---|---|---|---|
+| INC-001 | Orders stall at PENDING and never come back | SEV2 | Configuration / environment | 1 | 5 | 0 | 9/10 |
 
 ## Rolling numbers
 
-- Incidents closed: 0 / 12
-- Median time to mitigate: —
-- Mean RCA score: —
+- Incidents closed: 1 / 12
+- Median time to mitigate: 5 min
+- Mean RCA score: 9.0 / 10
 
 ## Category coverage
 
@@ -17,7 +18,7 @@ Target: at least 9 of the 12 categories in CLAUDE.md section 8.2.
 
 | # | Category | Covered by |
 |---|---|---|
-| 1 | Configuration / environment | |
+| 1 | Configuration / environment | INC-001 |
 | 2 | Application logic bug | |
 | 3 | Database performance | |
 | 4 | Concurrency / race condition | |

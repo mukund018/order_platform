@@ -256,6 +256,67 @@ check a collision hands one customer another customer's order with a `201`.
 
 ---
 
+## 13. support-service owns nothing and writes nothing
+
+The ops console needs traces, error groups and service health in a browser.
+`tools/logtool.py` already answers those questions on the command line, so the options
+were to reimplement them in TypeScript against raw log files, or to put an HTTP front end
+on the code that already exists.
+
+The second, with two constraints.
+
+**The analysis code moved to `common/logsearch.py`.** The CLI and the API now call the same
+functions. "What counts as an error line", "which request was slowest", "how a trace is
+stitched together" — if the console and the terminal ever disagreed about any of those, the
+console would be worse than useless during an incident, because you would not know which
+one was lying.
+
+**The service is read-only, all the way down.** No database, no migrations, no writes. The
+log volume is mounted `:ro` and so is `incidents/`. A support tool that can change the
+system it is diagnosing is a support tool you cannot trust at 3am, and the mount is what
+makes that a guarantee rather than an intention.
+
+It also logs to stdout rather than into the log directory it reads. That was not the
+original plan — the read-only mount rejected the file handler on first boot — but it is the
+right answer: a service that wrote its own warnings into the directory it searches would
+report on itself, and its own errors would show up on its own error board.
+
+---
+
+## 14. One origin for the browser, so no service needs CORS
+
+nginx serves the built SPA and reverse-proxies `/api/orders/`, `/api/inventory/`,
+`/api/payments/`, `/api/support/` and `/api/prom/` to the containers. The browser only ever
+talks to `localhost:5173`.
+
+The alternative is `CORSMiddleware` on four services, each with its own list of allowed
+origins to keep in step, and a preflight request in front of every call. The proxy is one
+file, it is how this would be deployed anyway, and it keeps support-service reachable from
+the console without publishing it to anyone else.
+
+The dev server mirrors the same prefixes in `vite.config.ts`, so `npm run dev` and the
+container build run identical client code.
+
+---
+
+## 15. Phase 3 faults are sealed, not hidden
+
+The point of an incident exercise is that the person investigating does not already know
+the answer. When the same person writes the faults, that is hard to keep true.
+
+`incidents/faults/INC-0XX.json` splits each incident in two. The half you are allowed to
+read — ticket, category, the load profile needed to reproduce it — is plain text. The half
+that gives it away is base64 in a `spoiler` field: not encryption, just a speed bump that
+stops `cat` or `grep` spilling it by accident and makes decoding it a deliberate act.
+`chaos.py reveal` refuses to print it until `rca.md` has actually been written.
+
+Four of the twelve touch no application code at all — environment values, a compose
+override, or rows in the database — so `git diff` on the incident branch would not help
+even if you cheated. The code faults are committed under one neutral message,
+`chore: INC-0XX environment setup`.
+
+---
+
 ## Later — noted, not built
 
 Out of scope per CLAUDE.md section 10, written down so the reasoning is not lost:

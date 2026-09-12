@@ -2,6 +2,7 @@ import uuid
 
 import httpx
 import pytest
+from prometheus_client import REGISTRY
 
 from app.clients.inventory import ReservationLine, get_inventory_client
 from app.clients.payments import get_payments_client
@@ -130,3 +131,61 @@ def test_a_declined_charge_is_a_normal_response_not_an_error(upstream: Upstream)
 
     assert not payment.succeeded
     assert payment.failure_reason == "insufficient_funds"
+
+
+def _upstream_calls(upstream_name: str, outcome: str) -> float:
+    value = REGISTRY.get_sample_value(
+        "upstream_calls_total", {"upstream": upstream_name, "outcome": outcome}
+    )
+    return value or 0.0
+
+
+@pytest.mark.parametrize(
+    ("side_effect", "outcome"),
+    [
+        (httpx.ReadTimeout("timed out"), "timeout"),
+        (httpx.ConnectError("refused"), "unreachable"),
+    ],
+)
+def test_a_failed_call_is_counted_not_only_logged(
+    upstream: Upstream, side_effect: Exception, outcome: str
+) -> None:
+    """Regression test for INC-001.
+
+    The timeout that caused it was logged perfectly and measured nowhere, so every
+    dashboard stayed green while 2% of checkouts failed. The outcome of an outbound call
+    has to exist as a metric, labelled by which dependency, or an alert cannot see it.
+    """
+    before = _upstream_calls("inventory", outcome)
+    upstream.reserve.mock(side_effect=side_effect)
+
+    with pytest.raises(AppError):
+        reserve()
+
+    assert _upstream_calls("inventory", outcome) == before + 1
+
+
+def test_a_successful_call_is_counted_too(upstream: Upstream) -> None:
+    """Without the denominator a timeout rate is just a count, and a count cannot tell
+    you whether one call in ten thousand failed or one in three."""
+    before = _upstream_calls("inventory", "ok")
+
+    reserve()
+
+    assert _upstream_calls("inventory", "ok") == before + 1
+
+
+def test_a_business_refusal_is_counted_as_an_error_not_a_timeout(upstream: Upstream) -> None:
+    """OUT_OF_STOCK is a 409 and a perfectly healthy answer. It must not pollute the
+    signal the timeout alert watches."""
+    before_error = _upstream_calls("inventory", "error")
+    before_timeout = _upstream_calls("inventory", "timeout")
+    upstream.reserve.mock(
+        return_value=httpx.Response(409, json=error_body("OUT_OF_STOCK", "no stock"))
+    )
+
+    with pytest.raises(AppError):
+        reserve()
+
+    assert _upstream_calls("inventory", "error") == before_error + 1
+    assert _upstream_calls("inventory", "timeout") == before_timeout

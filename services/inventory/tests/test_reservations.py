@@ -127,6 +127,24 @@ def test_a_request_without_items_is_rejected(client: TestClient) -> None:
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
+def test_active_reservations_lists_only_active_ones(
+    client: TestClient, make_product: Callable[..., Product]
+) -> None:
+    """INC-009: this endpoint is the reconciliation join's other half - it must never
+    include COMMITTED or RELEASED rows, or a healthy order would look stranded."""
+    make_product("SKU-0001", stock=10)
+    make_product("SKU-0002", stock=10)
+    _reserve(client, [{"sku": "SKU-0001", "qty": 2}], order_id=ORDER_ID)
+    _reserve(client, [{"sku": "SKU-0002", "qty": 1}], order_id=OTHER_ORDER_ID)
+    client.post(f"/reservations/{OTHER_ORDER_ID}/commit")
+
+    response = client.get("/reservations/active")
+
+    assert response.status_code == 200
+    order_ids = {row["order_id"] for row in response.json()}
+    assert order_ids == {ORDER_ID}
+
+
 def test_the_same_order_id_never_takes_stock_twice(
     client: TestClient, session: Session, make_product: Callable[..., Product]
 ) -> None:

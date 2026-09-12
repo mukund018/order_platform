@@ -10,7 +10,7 @@ from collections.abc import Iterable, Sequence
 
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.cache import ProductCache
 from app.metrics import RESERVATION_FAILURES
@@ -200,6 +200,20 @@ def release_reservation(session: Session, order_id: uuid.UUID) -> list[StockRese
     session.flush()
     log.info("reservation_released", order_id=str(order_id), items=len(rows), units=returned)
     return rows
+
+
+def list_active_reservations(session: Session) -> list[StockReservation]:
+    """Every reservation still holding stock against an order. INC-009: nothing on
+    inventory's side knows whether the order on the other end of one of these rows is
+    still alive - that has to be asked of orders-service, which is what reconciliation
+    is for."""
+    statement = (
+        select(StockReservation)
+        .where(StockReservation.status == ReservationStatus.ACTIVE)
+        .options(selectinload(StockReservation.product))
+        .order_by(StockReservation.created_at)
+    )
+    return list(session.scalars(statement))
 
 
 def _require_product(session: Session, sku: str) -> Product:

@@ -61,9 +61,7 @@ def test_ttl_is_jittered_so_keys_do_not_expire_in_lockstep(
     project treats as the source of truth. Controlling the random draw instead makes
     the assertion exact and the test unable to flake."""
     calls = iter([-12, 0, 12])
-    monkeypatch.setattr(
-        "app.cache.random.randint", lambda _lo, _hi: next(calls)
-    )
+    monkeypatch.setattr("app.cache.random.randint", lambda _lo, _hi: next(calls))
     redis = fakeredis.FakeRedis(decode_responses=True)
     cache = ProductCache(redis, ttl=60)
 

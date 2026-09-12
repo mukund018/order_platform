@@ -2,13 +2,15 @@
 
 ## Current position
 
-Phase: 3 (paused) + 4 | Next task: **INC-003** (`python tools/chaos.py start INC-003`) —
-Phase 4 was built out of order at Kumar's request, ahead of finishing Phase 3.
+Phase: 3 + 4 | Next task: **INC-004** (`python tools/chaos.py start INC-004`) — Phase 3 is
+now being closed out by the AI at Kumar's explicit request (see the INC-003 RCA for the
+authenticity note: hints and timings reflect the AI's investigation, not Kumar's own).
 
-Phases 1 and 2 are built and verified on live infrastructure. Phase 3 has two of twelve
-incidents closed, both fully worked with real evidence off the running stack. The remaining
-ten are written and sealed, waiting to be worked one at a time. A storefront and ops console
-have been added on top, plus a fifth service that serves the log tooling over HTTP.
+Phases 1 and 2 are built and verified on live infrastructure. Phase 3 has three of twelve
+incidents closed. INC-001 and INC-002 were worked by Kumar with real evidence off the
+running stack; INC-003 was worked by the AI, same rigor, same tools, honestly labeled.
+Nine remain sealed. A storefront and ops console have been added on top, plus a fifth
+service that serves the log tooling over HTTP.
 
 **Phase 4 (AI Incident Assistant) is built and verified live.** `incident-assistant/`
 (port 8005) grounds Gemini in the platform's own closed RCAs and runbooks and answers
@@ -180,7 +182,7 @@ Phase 3 is the part that gets defended in an interview.
 - [x] M8 Support toolkit ← Phase 2
 - [x] Web: storefront + ops console, and support-service behind it
 - [x] Phase 3 harness + twelve sealed faults
-- [ ] INC-001 … INC-012 — **2 of 12 closed**
+- [ ] INC-001 … INC-012 — **3 of 12 closed** (INC-001, INC-002 by Kumar; INC-003 by the AI)
 - [ ] Final polish (demo script, interview prep, CV bullets)
 - [x] Phase 4 — AI Incident Assistant (`incident-assistant/`, port 8005), verified live — **built ahead of finishing Phase 3, at Kumar's request**
 
@@ -234,6 +236,7 @@ Phase 3 is the part that gets defended in an interview.
 
 | Date | What was done | Next |
 |---|---|---|
+| 2026-09-12 (5) | Closed INC-003 (SEV2, TTM 15min, 3 hints, RCA 9/10) — worked by the AI at Kumar's request, same tools and rigor as INC-001/002, labeled honestly. Root cause: `ix_stock_reservations_order_id` existed in the model and migration but was missing from the live database (dropped out-of-band) — every reserve/commit/release did a full table scan of a table that only grows. Found via `pg_stat_statements` sorted by `total_exec_time` (every individual call looked cheap by *mean*) then `EXPLAIN ANALYZE` confirming `Seq Scan`. Mitigated by recreating the index; added a plan-shape regression test (`test_reservation_query_plan.py`) and `runbooks/slow-query-missing-index.md`. Investigation independently matched the actual injected fault exactly on reveal, including the prevention recommendation. | INC-004 |
 | 2026-09-12 (4) | Full bug/error scan at Kumar's request. Fixed `GET /products` silently ignoring `?limit`. Ran the 3 Postgres-only concurrency tests for real — **and in doing so, pointed `TEST_DATABASE_URL` at the live `inventory_db`/`orders_db`/`payments_db` by mistake**, which dropped every table in all three (the test fixtures' session-teardown `Base.metadata.drop_all`). Recovered by clearing the stale `alembic_version` row and letting each service's real migration path recreate the schema on restart, then re-seeding — verified with a real end-to-end order afterward. Root-caused with `common/testing.py`'s `require_test_database`, now called by every service's schema fixture, which refuses to run against anything but SQLite or a `*_test`-suffixed database — proven against the exact scenario that caused this. All three concurrency suites then re-run correctly against the real `*_test` databases: 48/27/146 passing. Full writeup in `docs/decisions.md`. | Phase 3: INC-003 onward, run for real by the AI at Kumar's explicit request, then final polish |
 | 2026-09-12 (3) | Built Phase 4 (AI Incident Assistant) out of order, at Kumar's request, ahead of finishing Phase 3. `context_loader.py` written by Kumar with review (a real Windows-encoding bug caught and fixed: `read_text()` without `encoding="utf-8"` silently mangled the ₹ symbol in INC-002's RCA into 3-character mojibake). `main.py`, `config.py` and the UI built to close out the feature, reusing `common`'s logging/errors/health/metrics rather than bolting on something inconsistent. Switched away from the spec'd `google-generativeai` (fully deprecated) to `google-genai`, and from `gemini-1.5-flash` (retired, verified via a live 404) to `gemini-3.6-flash`. Verified live against the real Gemini API: correctly reconstructed INC-002's root cause from RCA text alone, honestly declined an unrelated question instead of guessing, and returned the platform's standard error envelope on a validation failure. 12 new tests for `context_loader`, wired into `run_tests.py`. Along the way: caught and fixed a bare-key `.env` file (missing the `GEMINI_API_KEY=` prefix) and a real gitignore gap (`gemini_api.env` at the repo root wasn't covered by any pattern) before either could reach the public GitHub repo. | Kumar's call: back to INC-003, or keep going on Phase 4's open questions (a test for `/ask`, wiring it into compose) |
 | 2026-09-12 (2) | Fixed the orders concurrency test. `git init`. Built support-service and the React storefront + ops console, both verified against live data. Built the Phase 3 chaos harness and twelve sealed faults covering all twelve categories. Worked INC-001 and INC-002 end to end with real measurements — including two honest corrections: INC-001's mechanism is client-side queueing, not a slow dependency, and INC-002's "missing" regression test already existed and already caught the bug, which moved the root cause to the absent test gate. Added `UpstreamTimeouts`, `upstream_calls_total`, two config guards, two runbooks and a pre-push hook. | INC-003 |

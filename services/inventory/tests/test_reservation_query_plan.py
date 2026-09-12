@@ -41,13 +41,17 @@ def test_reservation_lookup_by_order_id_does_not_seq_scan(
     )
     session.commit()
 
-    plan = session.execute(
-        text(
-            "EXPLAIN (FORMAT TEXT) SELECT id FROM stock_reservations "
-            "WHERE order_id = :order_id AND status IN ('ACTIVE', 'COMMITTED')"
-        ),
-        {"order_id": order_id},
-    ).scalars().all()
+    plan = (
+        session.execute(
+            text(
+                "EXPLAIN (FORMAT TEXT) SELECT id FROM stock_reservations "
+                "WHERE order_id = :order_id AND status IN ('ACTIVE', 'COMMITTED')"
+            ),
+            {"order_id": order_id},
+        )
+        .scalars()
+        .all()
+    )
     plan_text = "\n".join(plan)
 
     assert "Seq Scan on stock_reservations" not in plan_text, (

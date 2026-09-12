@@ -15,10 +15,11 @@ Phase 3 log. One row per incident, filled in when the RCA is scored.
 | INC-009 | Stock on hand does not match the warehouse | SEV3 | Data integrity across services | 1 | 7 | 0 | 8/10 |
 | INC-010 | Customers getting the same confirmation email repeatedly | SEV3 | Deployment / migration | 1 | 3 | 0 | 9/10 |
 | INC-011 | Checkout fails in bursts when a product is popular | SEV2 | Concurrency / race condition | 1 | 6 | 0 | 9/10 |
+| INC-012 | Product pages spike to several seconds, in waves | SEV2 | Retry / timeout / idempotency | 1 | 6 | 0 | 9/10 |
 
 ## Rolling numbers
 
-- Incidents closed: 11 / 12
+- Incidents closed: 12 / 12 — **Phase 3 complete**
 - Median time to mitigate: 6 min
 - Mean RCA score: 8.3 / 10
 
@@ -39,4 +40,4 @@ Target: at least 9 of the 12 categories in CLAUDE.md section 8.2.
 | 9 | Deployment / migration | INC-010 |
 | 10 | Time and timezone | INC-007 |
 | 11 | Caching | INC-002 |
-| 12 | Retry / timeout / idempotency | |
+| 12 | Retry / timeout / idempotency | INC-012 |

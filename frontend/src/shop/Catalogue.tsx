@@ -137,7 +137,7 @@ function ProductCard({ product }: { product: Product }) {
 
   return (
     <article className="product">
-      <Swatch seed={product.sku} />
+      <Swatch seed={product.sku} label={product.name} />
       <span className="sku">{product.sku}</span>
       <span className="name">{product.name}</span>
       <div className="row between">

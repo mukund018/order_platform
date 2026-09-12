@@ -52,6 +52,7 @@ docker compose up -d --build
 | inventory | http://localhost:8002/docs |
 | payments | http://localhost:8003/docs |
 | support | http://localhost:8004/docs |
+| incident assistant (also at Ops → Ask AI) | http://localhost:8005/docs |
 | Prometheus | http://localhost:9090 |
 | Grafana | http://localhost:3000 |
 
@@ -95,6 +96,7 @@ what happened. Orders then poll until they reach a state they can never leave.
 | Order detail | The state machine next to every log line that mentions that order, from every service |
 | Trace | Paste a request id: every log line carrying it, across all four services, with the gap between each step |
 | Incidents | The Phase 3 board — status, severity, time to mitigate, RCA score |
+| Ask AI | Phase 4's Gemini-backed assistant, grounded only in this platform's own closed incidents and runbooks |
 
 The trace screen is the one worth demoing. It names the bottleneck for you: *longest gap
 858ms, before payments/payment_settled*. That number is why the request-id middleware

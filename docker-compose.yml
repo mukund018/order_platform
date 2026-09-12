@@ -192,6 +192,33 @@ services:
       retries: 5
       start_period: 20s
 
+  incident-assistant:
+    build:
+      context: .
+      dockerfile: incident-assistant/Dockerfile
+    image: order-platform/incident-assistant:dev
+    restart: unless-stopped
+    # Its own .env (GEMINI_API_KEY), not the root one - this service shares no other
+    # config with the rest of the platform and has no database of its own to connect to.
+    env_file: incident-assistant/.env
+    environment:
+      RUN_MIGRATIONS: 0
+      INCIDENTS_DIR: /app/incidents
+      RUNBOOKS_DIR: /app/runbooks
+    volumes:
+      # Read-only, same reasoning as support-service: this reports on closed incidents,
+      # it does not write any.
+      - ./incidents:/app/incidents:ro
+      - ./runbooks:/app/runbooks:ro
+    ports:
+      - "8005:8005"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8005/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+
   web:
     build:
       context: ./frontend

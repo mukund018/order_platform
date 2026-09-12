@@ -160,6 +160,14 @@ export interface IncidentBoard {
   total: number;
 }
 
+// --------------------------------------------------------------------- assistant
+
+export interface AssistantAnswer {
+  root_cause: string;
+  suggested_fix: string;
+  escalation: string;
+}
+
 // --------------------------------------------------------------------- cart
 
 export interface CartLine {

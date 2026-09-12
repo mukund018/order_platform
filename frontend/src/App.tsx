@@ -3,6 +3,7 @@ import { Link, NavLink, Navigate, Route, Routes, useLocation } from "react-route
 
 import { api } from "./api/client";
 import { usePolling } from "./api/hooks";
+import Assistant from "./ops/Assistant";
 import Incidents from "./ops/Incidents";
 import OpsOrderDetail from "./ops/OrderDetail";
 import Orders from "./ops/Orders";
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="/ops/trace" element={<TraceViewer />} />
             <Route path="/ops/trace/:requestId" element={<TraceViewer />} />
             <Route path="/ops/incidents" element={<Incidents />} />
+            <Route path="/ops/assistant" element={<Assistant />} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
@@ -93,6 +95,7 @@ function TopBar() {
             <NavLink to="/ops/orders">Orders</NavLink>
             <NavLink to="/ops/trace">Trace</NavLink>
             <NavLink to="/ops/incidents">Incidents</NavLink>
+            <NavLink to="/ops/assistant">Ask AI</NavLink>
             <HealthDot />
           </>
         ) : (

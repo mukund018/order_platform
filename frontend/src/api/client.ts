@@ -8,6 +8,7 @@
  */
 
 import type {
+  AssistantAnswer,
   DailyReport,
   ErrorEnvelope,
   ErrorsReport,
@@ -135,6 +136,13 @@ export const api = {
     request<SlowReport>(`/api/support/slow${query({ since, top })}`),
   orderStory: (orderId: string) => request<OrderStory>(`/api/support/order/${orderId}`),
   incidents: () => request<IncidentBoard>("/api/support/incidents"),
+
+  // ------------------------------------------------------------------ assistant
+  ask: (query: string) =>
+    request<AssistantAnswer>("/api/assistant/ask", {
+      method: "POST",
+      body: JSON.stringify({ query }),
+    }),
 };
 
 export function describeError(error: unknown): { title: string; detail?: string; requestId?: string } {

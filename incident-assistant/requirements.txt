@@ -2,9 +2,11 @@ fastapi>=0.115
 uvicorn[standard]>=0.32
 pydantic>=2.9
 pydantic-settings>=2.6
-google-generativeai>=0.8
+google-genai>=1.0
 python-dotenv>=1.0
 pyyaml>=6.0
 
-# shared logging config used by every other service in this repo
--e ../common
+# common (shared logging config used by every service) is installed separately -
+# see README.md's setup steps and the Dockerfile. A relative "-e ../common" here only
+# resolves correctly if pip is run from inside this exact directory, which is not true
+# for the Docker build and was never actually how the shared dev venv installs it.

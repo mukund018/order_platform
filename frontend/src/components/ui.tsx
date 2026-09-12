@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { describeError } from "../api/client";
 import { copy, shortId } from "../lib/format";
+import { pickIcon } from "../lib/icons";
 import type { Tone } from "../lib/status";
 
 export function Card({
@@ -152,11 +153,14 @@ export function Bar({ value, max, tone }: { value: number; max: number; tone?: "
 
 /**
  * A deterministic colour per SKU, so a product keeps the same swatch between renders and
- * between sessions without anyone having to store an image.
+ * between sessions without anyone having to store an image - plus, when `label` is given,
+ * a small icon matched to the product's name (see lib/icons.tsx). No image host, so
+ * nothing here can ever 404 or show a broken-image icon.
  */
-export function Swatch({ seed }: { seed: string }) {
+export function Swatch({ seed, label }: { seed: string; label?: string }) {
   let hash = 0;
   for (const char of seed) hash = (hash * 31 + char.charCodeAt(0)) % 360;
+  const Icon = label ? pickIcon(label) : null;
   return (
     <div
       className="swatch"
@@ -164,6 +168,8 @@ export function Swatch({ seed }: { seed: string }) {
         background: `linear-gradient(135deg,
           oklch(0.55 0.11 ${hash}), oklch(0.42 0.09 ${(hash + 48) % 360}))`,
       }}
-    />
+    >
+      {Icon && <Icon className="swatch-icon" aria-hidden="true" />}
+    </div>
   );
 }

@@ -1,0 +1,35 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    stack: order-platform
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: orders
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["orders:8001"]
+
+  - job_name: inventory
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["inventory:8002"]
+
+  - job_name: payments
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["payments:8003"]
+
+  # The celery worker has no HTTP API, so it starts a bare prometheus client
+  # server on 9100 just to be scraped.
+  - job_name: worker
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["worker:9100"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

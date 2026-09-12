@@ -1,0 +1,33 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+.venv/
+venv/
+.env
+
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+logs/*
+!logs/.gitkeep
+*.log
+
+.vscode/*
+!.vscode/launch.json
+
+.DS_Store
+Thumbs.db
+
+# Installers and other large local binaries — never belongs in the repo
+*.exe
+
+# Frontend
+node_modules/
+frontend/dist/

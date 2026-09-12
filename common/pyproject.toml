@@ -1,0 +1,26 @@
+[project]
+name = "order-platform-common"
+version = "0.1.0"
+description = "Shared logging, tracing, errors, health and metrics for the order platform services"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "starlette>=0.40",
+    "structlog>=24.4",
+    "prometheus-client>=0.21",
+    "httpx>=0.27",
+]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["common*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+
+[tool.coverage.run]
+source = ["common"]

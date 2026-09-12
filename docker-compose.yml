@@ -1,0 +1,203 @@
+name: order-platform
+
+x-service-base: &service-base
+  restart: unless-stopped
+  env_file: .env
+  volumes:
+    - ./logs:/app/logs
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+      POSTGRES_DB: postgres
+    # pg_stat_statements has to be preloaded at startup; init.sql then creates the
+    # extension inside each of the three databases.
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=all
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app} -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  inventory:
+    <<: *service-base
+    build:
+      context: .
+      dockerfile: services/inventory/Dockerfile
+    image: order-platform/inventory:dev
+    environment:
+      DEBUG_PORT: 5679
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002"]
+    ports:
+      - "8002:8002"
+      - "5679:5679"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8002/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+
+  payments:
+    <<: *service-base
+    build:
+      context: .
+      dockerfile: services/payments/Dockerfile
+    image: order-platform/payments:dev
+    environment:
+      DEBUG_PORT: 5680
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8003"]
+    ports:
+      - "8003:8003"
+      - "5680:5680"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8003/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+
+  orders:
+    <<: *service-base
+    build:
+      context: .
+      dockerfile: services/orders/Dockerfile
+    image: order-platform/orders:dev
+    environment:
+      DEBUG_PORT: 5678
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
+    ports:
+      - "8001:8001"
+      - "5678:5678"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      inventory:
+        condition: service_healthy
+      payments:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+
+  worker:
+    <<: *service-base
+    build:
+      context: .
+      dockerfile: services/orders/Dockerfile
+    image: order-platform/orders:dev
+    environment:
+      # orders-service already ran them on startup; two containers racing on
+      # alembic upgrade head is a good way to corrupt a version table.
+      RUN_MIGRATIONS: 0
+      DEBUG_PORT: 5681
+      METRICS_PORT: 9100
+    # A thread pool, not the default prefork pool: the tasks are all database and
+    # HTTP waits, and one process means one prometheus registry to scrape.
+    command:
+      - celery
+      - -A
+      - app.celery_app.celery_app
+      - worker
+      - --pool=threads
+      - --concurrency=4
+      - --loglevel=INFO
+    ports:
+      - "5681:5681"
+      - "9100:9100"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      orders:
+        condition: service_healthy
+
+  beat:
+    <<: *service-base
+    build:
+      context: .
+      dockerfile: services/orders/Dockerfile
+    image: order-platform/orders:dev
+    environment:
+      RUN_MIGRATIONS: 0
+    command:
+      - celery
+      - -A
+      - app.celery_app.celery_app
+      - beat
+      - --loglevel=INFO
+    depends_on:
+      redis:
+        condition: service_healthy
+      orders:
+        condition: service_healthy
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - promdata:/prometheus
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+volumes:
+  pgdata:
+  promdata:
+  grafanadata:

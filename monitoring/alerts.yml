@@ -1,0 +1,76 @@
+groups:
+  - name: availability
+    rules:
+      - alert: ServiceDown
+        expr: up{job=~"orders|inventory|payments|worker"} == 0
+        for: 1m
+        labels:
+          severity: sev1
+        annotations:
+          summary: "{{ $labels.job }} is not being scraped"
+          description: >-
+            Prometheus has failed to scrape {{ $labels.job }} for over a minute.
+            Check `docker compose ps` and `docker compose logs {{ $labels.job }}`.
+          runbook: runbooks/service-down.md
+
+  - name: request-health
+    rules:
+      - alert: HighServerErrorRate
+        expr: >-
+          sum by (service) (rate(http_requests_total{status=~"5.."}[5m]))
+          /
+          sum by (service) (rate(http_requests_total[5m]))
+          > 0.05
+        for: 2m
+        labels:
+          severity: sev2
+        annotations:
+          summary: "{{ $labels.service }} is returning more than 5% 5xx"
+          description: >-
+            {{ $value | humanizePercentage }} of requests to {{ $labels.service }}
+            are failing with a server error.
+          runbook: runbooks/high-error-rate.md
+
+      - alert: HighLatencyP95
+        expr: >-
+          histogram_quantile(
+            0.95,
+            sum by (service, le) (rate(http_request_duration_seconds_bucket[5m]))
+          ) > 1
+        for: 5m
+        labels:
+          severity: sev3
+        annotations:
+          summary: "{{ $labels.service }} p95 latency above 1s"
+          description: "p95 is {{ $value }}s over the last 5 minutes."
+          runbook: runbooks/slow-requests.md
+
+  - name: business
+    rules:
+      # No 5xx and no failed requests, yet orders are piling up unfinished:
+      # the kind of thing only a business metric catches.
+      - alert: OrdersStuckPending
+        expr: stale_pending_orders > 10
+        for: 5m
+        labels:
+          severity: sev2
+        annotations:
+          summary: "More than 10 orders stuck before CONFIRMED"
+          description: >-
+            {{ $value }} orders have been PENDING or RESERVED for over five minutes.
+            Either the reservation or the payment step is not completing.
+          runbook: runbooks/orders-stuck-pending.md
+
+      - alert: CeleryTaskFailureRate
+        expr: >-
+          sum(rate(celery_tasks_total{result="failure"}[5m]))
+          /
+          clamp_min(sum(rate(celery_tasks_total[5m])), 0.001)
+          > 0.1
+        for: 5m
+        labels:
+          severity: sev3
+        annotations:
+          summary: "Celery tasks failing above 10%"
+          description: "{{ $value | humanizePercentage }} of tasks are ending in failure."
+          runbook: runbooks/celery-task-failures.md

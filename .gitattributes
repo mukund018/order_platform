@@ -1,0 +1,6 @@
+* text=auto eol=lf
+
+# These run inside Linux containers. CRLF here means "bad interpreter" at startup.
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.yml text eol=lf

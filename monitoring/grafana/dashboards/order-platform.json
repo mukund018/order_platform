@@ -1,0 +1,341 @@
+{
+  "uid": "order-platform",
+  "title": "Order Platform",
+  "description": "RED metrics for the three services plus the order, payment and queue business metrics.",
+  "tags": ["order-platform"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
+  "annotations": { "list": [] },
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "label": "Service",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+        "query": "label_values(http_requests_total, service)",
+        "refresh": 1,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Requests / sec",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "decimals": 1, "color": { "mode": "fixed", "fixedColor": "text" } },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none", "graphMode": "area" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+          "expr": "sum(rate(http_requests_total{service=~\"$service\"}[5m]))"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "5xx rate",
+      "description": "Share of requests answered with a server error. The HighServerErrorRate alert fires above 5%.",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 0.01 },
+              { "color": "red", "value": 0.05 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+          "expr": "sum(rate(http_requests_total{service=~\"$service\",status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_requests_total{service=~\"$service\"}[5m])), 0.001)"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Orders confirmed / min",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 1 }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none", "graphMode": "area" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+          "expr": "sum(rate(orders_total{status=\"CONFIRMED\"}[5m])) * 60"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Orders stuck > 5 min",
+      "description": "PENDING or RESERVED and older than five minutes. Should sit at zero.",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 1 },
+              { "color": "red", "value": 10 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+          "expr": "sum(stale_pending_orders)"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Request rate by service",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "custom": { "fillOpacity": 10, "lineWidth": 1, "showPoints": "never" } },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "table", "calcs": ["mean", "max"], "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+          "expr": "sum by (service) (rate(http_requests_total{service=~\"$service\"}[5m]))",
+          "legendFormat": "{{service}}"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "p95 latency by service",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "fillOpacity": 0, "lineWidth": 2, "showPoints": "never" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "table", "calcs": ["mean", "max"], "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+          "expr": "histogram_quantile(0.95, sum by (service, le) (rate(http_request_duration_seconds_bucket{service=~\"$service\"}[5m])))",
+          "legendFormat": "{{service}} p95"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+          "expr": "histogram_quantile(0.50, sum by (service, le) (rate(http_request_duration_seconds_bucket{service=~\"$service\"}[5m])))",
+          "legendFormat": "{{service}} p50"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Error rate by service",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "custom": { "fillOpacity": 10, "lineWidth": 1, "showPoints": "never" } },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+          "expr": "sum by (service) (rate(http_requests_total{service=~\"$service\",status=~\"5..\"}[5m])) / clamp_min(sum by (service) (rate(http_requests_total{service=~\"$service\"}[5m])), 0.001)",
+          "legendFormat": "{{service}} 5xx"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+          "expr": "sum by (service) (rate(http_requests_total{service=~\"$service\",status=~\"4..\"}[5m])) / clamp_min(sum by (service) (rate(http_requests_total{service=~\"$service\"}[5m])), 0.001)",
+          "legendFormat": "{{service}} 4xx"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Orders by status",
+      "description": "Current count per status, read from orders_db at scrape time.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "custom": { "fillOpacity": 20, "lineWidth": 1, "stacking": { "mode": "normal" }, "showPoints": "never" } },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "table", "calcs": ["lastNotNull"], "placement": "right" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+          "expr": "sum by (status) (orders_by_status)",
+          "legendFormat": "{{status}}"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Payment attempts",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "custom": { "fillOpacity": 10, "lineWidth": 1, "showPoints": "never" } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "failed" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }]
+          }
+        ]
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+          "expr": "sum by (result) (rate(payment_attempts_total[5m])) * 60",
+          "legendFormat": "{{result}}"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Celery task outcomes",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "custom": { "fillOpacity": 10, "lineWidth": 1, "showPoints": "never" } },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "table", "calcs": ["sum"], "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+          "expr": "sum by (task, result) (rate(celery_tasks_total[5m])) * 60",
+          "legendFormat": "{{task}} {{result}}"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "DB connection pool",
+      "description": "in_use approaching db_pool_size + overflow is the early warning for a stall downstream.",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "custom": { "fillOpacity": 0, "lineWidth": 2, "showPoints": "never" } },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "table", "calcs": ["max"], "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+          "expr": "db_pool_connections{service=~\"$service\"}",
+          "legendFormat": "{{service}} {{state}}"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+          "expr": "db_pool_size{service=~\"$service\"}",
+          "legendFormat": "{{service}} configured size"
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "type": "timeseries",
+      "title": "Reservation failures by reason",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "custom": { "fillOpacity": 10, "lineWidth": 1, "showPoints": "never" } },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+          "expr": "sum by (reason) (rate(reservation_failures_total[5m])) * 60",
+          "legendFormat": "{{reason}}"
+        }
+      ]
+    },
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "Stock level, tracked SKUs",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "custom": { "fillOpacity": 0, "lineWidth": 2, "showPoints": "never" } },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "table", "calcs": ["lastNotNull"], "placement": "right" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "order-platform-prom" },
+          "expr": "product_stock",
+          "legendFormat": "{{sku}}"
+        }
+      ]
+    }
+  ]
+}

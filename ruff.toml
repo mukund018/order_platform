@@ -1,0 +1,30 @@
+line-length = 100
+target-version = "py312"
+
+# extend-exclude, not exclude: setting `exclude` replaces ruff's built-in list, which is
+# what stops it walking into .venv and site-packages.
+extend-exclude = ["**/alembic/versions", "logs"]
+
+[lint]
+select = [
+    "E",   # pycodestyle
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # bugbear
+    "SIM", # simplify
+    "T20", # no print()
+    "RUF",
+]
+ignore = [
+    "B008", # FastAPI Depends() in defaults is the documented pattern
+]
+
+[lint.isort]
+known-first-party = ["common", "app", "tools"]
+
+[lint.per-file-ignores]
+"tools/*.py" = ["T20"]          # the CLI tools are supposed to print
+"run_tests.py" = ["T20"]
+"**/tests/*.py" = ["T20"]
+"**/alembic/env.py" = ["E402"]  # alembic wants config loaded before imports

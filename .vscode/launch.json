@@ -1,0 +1,58 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Attach: orders",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": { "host": "localhost", "port": 5678 },
+      "pathMappings": [
+        { "localRoot": "${workspaceFolder}/services/orders", "remoteRoot": "/app" },
+        { "localRoot": "${workspaceFolder}/common", "remoteRoot": "/app/common" }
+      ],
+      "justMyCode": false
+    },
+    {
+      "name": "Attach: inventory",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": { "host": "localhost", "port": 5679 },
+      "pathMappings": [
+        { "localRoot": "${workspaceFolder}/services/inventory", "remoteRoot": "/app" },
+        { "localRoot": "${workspaceFolder}/common", "remoteRoot": "/app/common" }
+      ],
+      "justMyCode": false
+    },
+    {
+      "name": "Attach: payments",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": { "host": "localhost", "port": 5680 },
+      "pathMappings": [
+        { "localRoot": "${workspaceFolder}/services/payments", "remoteRoot": "/app" },
+        { "localRoot": "${workspaceFolder}/common", "remoteRoot": "/app/common" }
+      ],
+      "justMyCode": false
+    },
+    {
+      "name": "Attach: celery worker",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": { "host": "localhost", "port": 5681 },
+      "pathMappings": [
+        { "localRoot": "${workspaceFolder}/services/orders", "remoteRoot": "/app" },
+        { "localRoot": "${workspaceFolder}/common", "remoteRoot": "/app/common" }
+      ],
+      "justMyCode": false
+    },
+    {
+      "name": "pytest: current file",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["${file}", "-q"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    }
+  ]
+}

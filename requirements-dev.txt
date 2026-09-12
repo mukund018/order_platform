@@ -1,0 +1,14 @@
+# Everything needed to run lint + the whole test suite from one venv on the host.
+# Inside docker each service installs only its own pyproject.
+-e ./common
+-e ./services/inventory
+-e ./services/payments
+-e ./services/orders
+
+ruff==0.14.2
+pytest==8.4.2
+pytest-cov==6.2.1
+pytest-asyncio==1.2.0
+fakeredis==2.32.0
+freezegun==1.5.5
+respx==0.22.0

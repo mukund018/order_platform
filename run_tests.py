@@ -31,6 +31,7 @@ SUITES = {
     "inventory": ROOT / "services" / "inventory",
     "payments": ROOT / "services" / "payments",
     "orders": ROOT / "services" / "orders",
+    "support": ROOT / "services" / "support",
     "tools": ROOT,
     "repo": ROOT,
 }

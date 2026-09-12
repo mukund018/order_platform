@@ -166,6 +166,50 @@ services:
       orders:
         condition: service_healthy
 
+  support:
+    <<: *service-base
+    build:
+      context: .
+      dockerfile: services/support/Dockerfile
+    image: order-platform/support:dev
+    environment:
+      # It owns no schema, and it must never be the process that migrates one.
+      RUN_MIGRATIONS: 0
+      DEBUG_PORT: 5682
+      SUPPORT_INCIDENTS_DIR: /app/incidents
+    volumes:
+      # Read-only on both: this service reports on the platform, it does not change it.
+      - ./logs:/app/logs:ro
+      - ./incidents:/app/incidents:ro
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8004"]
+    ports:
+      - "8004:8004"
+      - "5682:5682"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8004/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: order-platform/web:dev
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    # nginx serves the built SPA and proxies /api/* to the services, which is what keeps
+    # the browser on one origin and the services free of any CORS configuration.
+    depends_on:
+      orders:
+        condition: service_healthy
+      inventory:
+        condition: service_healthy
+      support:
+        condition: service_healthy
+
   prometheus:
     image: prom/prometheus:v2.55.1
     restart: unless-stopped

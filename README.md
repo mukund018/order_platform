@@ -210,14 +210,14 @@ tests/        repo-level checks: migrations match models, services boot from .en
 suite         passed  failed  skipped   cov
 -------------------------------------------
 common            38       0        0   81%
-inventory         40       0        1   96%
+inventory         45       0        1   96%
 payments          26       0        1   94%
 orders           145       0        1   98%
 support           16       0        0   95%
 tools             50       0        0   66%
 repo               6       0        0   20%
 -------------------------------------------
-total            321       0        3
+total            326       0        3
 ```
 
 The frontend typechecks and builds as part of its own container: `npm run typecheck`,

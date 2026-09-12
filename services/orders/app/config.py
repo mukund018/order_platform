@@ -11,6 +11,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # right place to find out is at startup, not under customer load.
 MIN_UPSTREAM_TIMEOUT_S = 0.5
 
+# INC-008: the expiry job selects PENDING/RESERVED orders older than
+# now - ORDER_EXPIRY_MINUTES. A value at or near zero makes an order in the middle of
+# being placed eligible for expiry under its own request - the beat job and the request
+# handler then race on the same row, and the loser's state transition is illegal. This
+# floor is comfortably above the worst-case time an order actually spends in flight
+# (bounded by INVENTORY_TIMEOUT_S + PAYMENTS_TIMEOUT_S, a few seconds) and above the
+# beat tick interval itself (60s), so a real in-flight order can never be a false match.
+MIN_ORDER_EXPIRY_MINUTES = 1
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -28,7 +37,9 @@ class Settings(BaseSettings):
     # The celery worker has no HTTP API, so it serves prometheus on a bare port of its own.
     metrics_port: int = Field(9100, alias="METRICS_PORT")
 
-    order_expiry_minutes: int = Field(15, alias="ORDER_EXPIRY_MINUTES")
+    order_expiry_minutes: int = Field(
+        15, alias="ORDER_EXPIRY_MINUTES", ge=MIN_ORDER_EXPIRY_MINUTES
+    )
     business_timezone: str = Field("Asia/Kolkata", alias="BUSINESS_TIMEZONE")
 
     log_level: str = Field("INFO", alias="LOG_LEVEL")

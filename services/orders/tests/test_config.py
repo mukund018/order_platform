@@ -14,7 +14,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.config import MIN_UPSTREAM_TIMEOUT_S, Settings
+from app.config import MIN_ORDER_EXPIRY_MINUTES, MIN_UPSTREAM_TIMEOUT_S, Settings
 
 DATABASE_URL = "postgresql+psycopg://app:app@postgres:5432/orders_db"
 
@@ -58,3 +58,23 @@ def test_a_generous_timeout_is_still_allowed() -> None:
     """The floor guards against too-small only. Deciding a dependency is worth waiting
     ten seconds for is a judgement call, not an error."""
     assert build(INVENTORY_TIMEOUT_S="10.0").inventory_timeout_s == 10.0
+
+
+def test_an_expiry_window_at_or_near_zero_refuses_to_start() -> None:
+    """INC-008: ORDER_EXPIRY_MINUTES=0 made every in-flight order eligible for expiry
+    under its own request - the beat job and the request handler raced on the same row."""
+    with pytest.raises(ValidationError) as caught:
+        build(ORDER_EXPIRY_MINUTES="0")
+
+    assert "order_expiry_minutes" in str(caught.value).lower()
+
+
+def test_the_expiry_floor_itself_is_allowed() -> None:
+    settings = build(ORDER_EXPIRY_MINUTES=str(MIN_ORDER_EXPIRY_MINUTES))
+
+    assert settings.order_expiry_minutes == MIN_ORDER_EXPIRY_MINUTES
+
+
+def test_the_documented_expiry_default_is_above_the_floor() -> None:
+    assert build().order_expiry_minutes == 15
+    assert build().order_expiry_minutes >= MIN_ORDER_EXPIRY_MINUTES

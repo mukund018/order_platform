@@ -31,3 +31,7 @@ Thumbs.db
 # Frontend
 node_modules/
 frontend/dist/
+
+# Phase 3 chaos harness: names the files a live fault touched
+.chaos/
+docker-compose.override.yml

@@ -333,4 +333,9 @@ Out of scope per CLAUDE.md section 10, written down so the reasoning is not lost
 - **Retries on the inventory and payments calls.** There are none, deliberately: a retry
   on a non-idempotent POST is how you double-charge people. Adding them means adding
   idempotency keys to those calls first.
-- **CI.** No pipeline. `ruff check . && pytest` is the whole gate, run by hand.
+- **CI.** No pipeline. INC-002 is the argument for one: a change that a passing test
+  would have rejected reached a running environment because nobody ran the suite.
+  `.githooks/pre-push` now runs `ruff` and `run_tests.py` before a push and is the
+  stopgap — enable it with `git config core.hooksPath .githooks`. A hook is skippable
+  with `--no-verify` and only protects the machine it is configured on, so it is a
+  patch over the gap rather than a fix for it.

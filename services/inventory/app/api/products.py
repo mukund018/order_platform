@@ -51,4 +51,5 @@ def adjust_stock(
 ) -> ProductOut:
     product = service.adjust_stock(session, sku, payload.delta)
     session.commit()
+    cache.invalidate(sku)
     return ProductOut.model_validate(product)

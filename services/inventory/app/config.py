@@ -6,13 +6,21 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 DEFAULT_TRACKED_SKUS = ["SKU-0001", "SKU-0002", "SKU-0003", "SKU-0004", "SKU-0005"]
 
+# INC-002: a cache TTL is a statement about how wrong this service is allowed to be, so
+# it gets a ceiling as well as a floor. The incident ran at 1800 - half an hour of
+# customers being told a restocked product was sold out - and nothing rejected it,
+# because the only bound was ge=1. Five minutes is already generous for a catalogue that
+# invalidates on every write; anything beyond it should be a deliberate argument, not a
+# value somebody can set by accident.
+MAX_PRODUCT_CACHE_TTL = 300
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     database_url: str = Field(alias="INVENTORY_DATABASE_URL")
     redis_url: str = Field("redis://localhost:6379/0", alias="REDIS_URL")
-    product_cache_ttl: int = Field(60, alias="PRODUCT_CACHE_TTL", ge=1)
+    product_cache_ttl: int = Field(60, alias="PRODUCT_CACHE_TTL", ge=1, le=MAX_PRODUCT_CACHE_TTL)
     db_pool_size: int = Field(5, alias="DB_POOL_SIZE", ge=1)
     db_max_overflow: int = Field(5, alias="DB_MAX_OVERFLOW", ge=0)
     log_level: str = Field("INFO", alias="LOG_LEVEL")

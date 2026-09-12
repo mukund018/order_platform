@@ -8,9 +8,24 @@ from app import service
 from app.cache import ProductCache, get_cache
 from app.db import get_session
 from app.models import ReservationStatus, StockReservation
-from app.schemas import ReservationItem, ReservationOut, ReservationRequest
+from app.schemas import ActiveReservationOut, ReservationItem, ReservationOut, ReservationRequest
 
 router = APIRouter(prefix="/reservations", tags=["reservations"])
+
+
+@router.get(
+    "/active",
+    response_model=list[ActiveReservationOut],
+    summary="Every ACTIVE reservation (admin/reconciliation)",
+)
+def list_active_reservations(session: Session = Depends(get_session)) -> list[ActiveReservationOut]:
+    rows = service.list_active_reservations(session)
+    return [
+        ActiveReservationOut(
+            order_id=row.order_id, sku=row.product.sku, qty=row.qty, created_at=row.created_at
+        )
+        for row in rows
+    ]
 
 
 @router.post(

@@ -44,3 +44,16 @@ class ReservationOut(BaseModel):
     order_id: uuid.UUID
     status: ReservationStatus
     items: list[ReservationItem]
+
+
+class ActiveReservationOut(BaseModel):
+    """One ACTIVE reservation row, for cross-service reconciliation (INC-009) - not
+    grouped by order, because the question this answers is "is this row still owned
+    by a live order", not "what does this order's cart look like"."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    order_id: uuid.UUID
+    sku: str
+    qty: int
+    created_at: datetime

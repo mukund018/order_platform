@@ -32,12 +32,18 @@ SUITES = {
     "payments": ROOT / "services" / "payments",
     "orders": ROOT / "services" / "orders",
     "support": ROOT / "services" / "support",
+    "incident-assistant": ROOT,
     "tools": ROOT,
     "repo": ROOT,
 }
 
-# tools/ and the repo-level checks have no pyproject of their own, so they need the path.
-EXTRA_PATHS = {"tools": ["tools/tests"], "repo": ["tests"]}
+# tools/, incident-assistant/ and the repo-level checks have no pyproject of their own,
+# so they need the path.
+EXTRA_PATHS = {
+    "tools": ["tools/tests"],
+    "incident-assistant": ["incident-assistant/tests"],
+    "repo": ["tests"],
+}
 
 COUNT = re.compile(r"(\d+) (passed|failed|skipped|error)")
 ANSI = re.compile(r"\x1b\[[0-9;]*m")

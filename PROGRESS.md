@@ -2,12 +2,17 @@
 
 ## Current position
 
-Phase: 3 | Next task: **INC-003** (`python tools/chaos.py start INC-003`)
+Phase: 3 (paused) + 4 | Next task: **INC-003** (`python tools/chaos.py start INC-003`) —
+Phase 4 was built out of order at Kumar's request, ahead of finishing Phase 3.
 
 Phases 1 and 2 are built and verified on live infrastructure. Phase 3 has two of twelve
 incidents closed, both fully worked with real evidence off the running stack. The remaining
 ten are written and sealed, waiting to be worked one at a time. A storefront and ops console
 have been added on top, plus a fifth service that serves the log tooling over HTTP.
+
+**Phase 4 (AI Incident Assistant) is built and verified live.** `incident-assistant/`
+(port 8005) grounds Gemini in the platform's own closed RCAs and runbooks and answers
+`root_cause` / `suggested_fix` / `escalation` as JSON. See the Phase 4 section below.
 
 ## Environment
 
@@ -27,7 +32,7 @@ only `uv`.
 
 ## Test suite
 
-**326 passing, 3 skipped, ruff clean across 105 files.** Run it with
+**338 passing, 3 skipped, ruff clean across 108 files.** Run it with
 `.venv\Scripts\python.exe run_tests.py` (add `--cov` for the coverage column).
 
 | Component | Tests | Coverage |
@@ -37,6 +42,7 @@ only `uv`.
 | `payments` | 26 (+1 skipped) | 94% |
 | `orders` | 145 (+1 skipped) | 98%, **`state.py` 100%** |
 | `support` | 16 | 95% |
+| `incident-assistant` | 12 | — (context_loader only; main.py's /ask is verified live, not unit-tested — see Phase 4 open questions) |
 | `tools` | 50 | — |
 | `tests` (repo-level) | 6 | — |
 
@@ -79,6 +85,59 @@ twelve categories in CLAUDE.md §8.2.
 
 **INC-001 and INC-002 closed**, both with evidence measured off the running stack.
 
+## Phase 4 — AI Incident Assistant
+
+A fifth, standalone piece: `incident-assistant/` (port 8005), a small FastAPI service that
+answers questions about the platform's *own* incident history, not general knowledge.
+
+**How it's grounded.** `context_loader.py` reads every `incidents/INC-*/rca.md` that
+exists (only closed incidents have one — INC-003 onward don't exist as files yet, so an
+open incident's answer can never leak) plus every file in `runbooks/`, and concatenates
+them into one text block. No vector database, no embeddings — at this scale (2 RCAs, 9
+runbooks, ~58k characters) that would solve a problem the project doesn't have; Gemini's
+context window is a million tokens. Nothing is cached — every `/ask` call re-reads from
+disk, deliberately, since these files only change when an incident closes.
+
+**`POST /ask`** takes `{"query": "..."}` and returns `{"root_cause", "suggested_fix",
+"escalation"}` as JSON — enforced with Gemini's `response_schema` (not just prompted for),
+then re-validated on our side with a pydantic model before it ever reaches the caller.
+The system prompt explicitly instructs the model to say it doesn't know rather than
+answer from general knowledge when the query isn't covered — verified live: a Kubernetes
+ingress question got an honest "not in this incident history," and a cache-related
+question independently reconstructed INC-002's real root cause (removed
+`cache.invalidate(sku)` call, raised TTL) including the actual file path, from the RCA
+text alone.
+
+**Two deviations from the original spec, both deliberate:**
+- **`google-genai`, not `google-generativeai`.** The originally-specified package is fully
+  deprecated by Google ("no longer receiving updates or bug fixes") and emits a
+  `FutureWarning` on import. Shipping a dead SDK on a CV project is a bad trade for
+  following an instruction written before the deprecation.
+- **`gemini-3.6-flash`, not `gemini-1.5-flash`.** Verified live: `gemini-1.5-flash` 404s —
+  retired. `gemini-flash-latest` (the alias) also exists but hit transient 503s under
+  free-tier load during testing where the dated name did not, so the dated name is pinned
+  instead. Whichever model name is pinned here will eventually be retired too — this is a
+  live external dependency, not a fixed spec. Check
+  https://ai.google.dev/gemini-api/docs/models when `/ask` starts 404ing.
+
+**Consistent with the rest of the platform, not a bolt-on:** depends on `common` for
+structured JSON logging (`configure_logging`, same as every other service) and the
+standard error envelope (`common.errors` — a Gemini outage comes back as a `503
+DEPENDENCY_UNAVAILABLE` in the platform's normal error shape, not a raw stack trace).
+`/health` and `/metrics` exist for the same reason every other service has them.
+
+**Open questions, honestly:**
+- **`main.py`'s `/ask` route has no unit test** — it's verified live (three real queries,
+  documented above) but not covered by `run_tests.py`. Mocking the Gemini client and
+  testing the JSON-parse/validation-failure path would be the highest-value addition.
+- **Not wired into `docker-compose.yml`.** It runs standalone (`uvicorn main:app`) against
+  the shared `.venv`; it was never added as a compose service or given a healthcheck.
+- **No rate limiting or auth on `/ask`.** Fine for a portfolio demo hitting Gemini's free
+  tier alone; would need both before being reachable by anyone else.
+- **The Gemini API key touched this chat's transcript once**, while diagnosing a
+  malformed `.env` file. Kumar chose to keep the existing key rather than rotate it —
+  his call, recorded here for honesty.
+
 ## Verification — this session, on live infrastructure
 
 | Check | Result |
@@ -92,6 +151,10 @@ twelve categories in CLAUDE.md §8.2.
 | INC-001 guard works in a real container | pass — `INVENTORY_TIMEOUT_S=0.25` now refuses to boot |
 | INC-002 reproduced and quantified | pass — 12 SKUs, 720 units, ₹17,85,600 hidden, 0 errors logged |
 | INC-002 mitigated and verified | pass — a restock is visible on the very next read; 0 of 50 SKUs disagree |
+| incident-assistant boots and serves the UI and /health | pass |
+| /ask correctly reconstructs INC-002's root cause from RCA text alone | pass — named the actual file and mechanism |
+| /ask honestly declines an unrelated (Kubernetes) question | pass — did not hallucinate an answer |
+| /ask rejects an empty query with the platform's standard 422 error body | pass |
 
 ## Python focus areas (from M0 diagnostic)
 
@@ -115,6 +178,7 @@ Phase 3 is the part that gets defended in an interview.
 - [x] Phase 3 harness + twelve sealed faults
 - [ ] INC-001 … INC-012 — **2 of 12 closed**
 - [ ] Final polish (demo script, interview prep, CV bullets)
+- [x] Phase 4 — AI Incident Assistant (`incident-assistant/`, port 8005), verified live — **built ahead of finishing Phase 3, at Kumar's request**
 
 ## Decisions made (one line each, details in docs/decisions.md)
 
@@ -132,6 +196,9 @@ Phase 3 is the part that gets defended in an interview.
 - **support-service owns nothing and writes nothing** — read-only mounts make it a guarantee.
 - **One origin for the browser**, so no service needs CORS.
 - **Phase 3 faults are sealed, not hidden** — base64, and `reveal` is gated on a written RCA.
+- **incident-assistant re-reads RCAs/runbooks from disk on every request, no cache** — the corpus is tiny and changes rarely; caching would be solving a problem that doesn't exist yet.
+- **`google-genai` over the originally-specified `google-generativeai`** — the latter is fully deprecated by Google; verified live before switching.
+- **Gemini model pinned to a dated name (`gemini-3.6-flash`), not a `-latest` alias** — the alias hit transient 503s under free-tier load in testing where the dated name did not.
 
 ## Open questions / blockers
 
@@ -161,6 +228,7 @@ Phase 3 is the part that gets defended in an interview.
 
 | Date | What was done | Next |
 |---|---|---|
+| 2026-09-12 (3) | Built Phase 4 (AI Incident Assistant) out of order, at Kumar's request, ahead of finishing Phase 3. `context_loader.py` written by Kumar with review (a real Windows-encoding bug caught and fixed: `read_text()` without `encoding="utf-8"` silently mangled the ₹ symbol in INC-002's RCA into 3-character mojibake). `main.py`, `config.py` and the UI built to close out the feature, reusing `common`'s logging/errors/health/metrics rather than bolting on something inconsistent. Switched away from the spec'd `google-generativeai` (fully deprecated) to `google-genai`, and from `gemini-1.5-flash` (retired, verified via a live 404) to `gemini-3.6-flash`. Verified live against the real Gemini API: correctly reconstructed INC-002's root cause from RCA text alone, honestly declined an unrelated question instead of guessing, and returned the platform's standard error envelope on a validation failure. 12 new tests for `context_loader`, wired into `run_tests.py`. Along the way: caught and fixed a bare-key `.env` file (missing the `GEMINI_API_KEY=` prefix) and a real gitignore gap (`gemini_api.env` at the repo root wasn't covered by any pattern) before either could reach the public GitHub repo. | Kumar's call: back to INC-003, or keep going on Phase 4's open questions (a test for `/ask`, wiring it into compose) |
 | 2026-09-12 (2) | Fixed the orders concurrency test. `git init`. Built support-service and the React storefront + ops console, both verified against live data. Built the Phase 3 chaos harness and twelve sealed faults covering all twelve categories. Worked INC-001 and INC-002 end to end with real measurements — including two honest corrections: INC-001's mechanism is client-side queueing, not a slow dependency, and INC-002's "missing" regression test already existed and already caught the bug, which moved the root cause to the absent test gate. Added `UpstreamTimeouts`, `upstream_calls_total`, two config guards, two runbooks and a pre-push hook. | INC-003 |
 | 2026-09-12 (1) | Docker installed. Ran `docs/verification.md` steps 0–7 on the live stack for the first time: M5 traffic run 100% clean, zero orphaned reservations, `ServiceDown` fired at exactly 60s, compensation verified by killing payments mid-flight, 444/444 notifications. | Rewrite `test_concurrency.py`, `git init`, then INC-001 |
 | 2026-09-11/12 | Built Phases 1 and 2 end to end. 289 tests, ruff clean. Thirteen defects found and fixed during review. | Install Docker, work through `docs/verification.md` |

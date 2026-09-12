@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Incident Assistant</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    max-width: 44rem;
+    margin: 3rem auto;
+    padding: 0 1rem;
+    line-height: 1.5;
+  }
+  h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
+  p.sub { color: #666; margin-top: 0; }
+  textarea {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 6rem;
+    font: inherit;
+    padding: 0.6rem;
+    border-radius: 6px;
+    border: 1px solid #999;
+  }
+  button {
+    margin-top: 0.6rem;
+    padding: 0.5rem 1.2rem;
+    font: inherit;
+    border-radius: 6px;
+    border: 1px solid #333;
+    background: #222;
+    color: #fff;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .card {
+    margin-top: 1rem;
+    padding: 0.9rem 1rem;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    white-space: pre-wrap;
+  }
+  .card h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em;
+              margin: 0 0 0.35rem; color: #555; }
+  .card.error { border-color: #b00020; color: #b00020; }
+  #status { margin-top: 0.5rem; color: #666; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+  <h1>Incident Assistant</h1>
+  <p class="sub">Describe what you're seeing. Answers are grounded only in this
+     platform's own closed incidents and runbooks — not general advice.</p>
+
+  <textarea id="query" placeholder="e.g. payments service is returning 500s and the database connection pool looks maxed out"></textarea>
+  <br />
+  <button id="submit">Ask</button>
+  <div id="status"></div>
+  <div id="result"></div>
+
+<script>
+const queryEl = document.getElementById("query");
+const submitEl = document.getElementById("submit");
+const statusEl = document.getElementById("status");
+const resultEl = document.getElementById("result");
+
+function renderCard(title, body) {
+  const card = document.createElement("div");
+  card.className = "card";
+  const h2 = document.createElement("h2");
+  h2.textContent = title;
+  const p = document.createElement("p");
+  p.style.margin = "0";
+  p.textContent = body;
+  card.append(h2, p);
+  return card;
+}
+
+async function ask() {
+  const query = queryEl.value.trim();
+  if (!query) return;
+
+  submitEl.disabled = true;
+  statusEl.textContent = "Asking...";
+  resultEl.innerHTML = "";
+
+  try {
+    const res = await fetch("/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    });
+
+    const body = await res.json();
+
+    if (!res.ok) {
+      const message = body?.error?.message ?? `request failed (${res.status})`;
+      resultEl.appendChild(renderCard("Error", message));
+      return;
+    }
+
+    resultEl.append(
+      renderCard("Root cause", body.root_cause),
+      renderCard("Suggested fix", body.suggested_fix),
+      renderCard("Escalation", body.escalation),
+    );
+  } catch (err) {
+    resultEl.appendChild(renderCard("Error", String(err)));
+  } finally {
+    statusEl.textContent = "";
+    submitEl.disabled = false;
+  }
+}
+
+submitEl.addEventListener("click", ask);
+queryEl.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) ask();
+});
+</script>
+</body>
+</html>

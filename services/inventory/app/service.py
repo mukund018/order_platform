@@ -127,7 +127,7 @@ def reserve(
         product = products[item.sku]
         updated = session.execute(
             update(Product)
-            .where(Product.id == product.id, Product.stock > item.qty)
+            .where(Product.id == product.id, Product.stock >= item.qty)
             .values(stock=Product.stock - item.qty)
             .execution_options(synchronize_session=False)
         )

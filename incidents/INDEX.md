@@ -14,12 +14,13 @@ Phase 3 log. One row per incident, filled in when the RCA is scored.
 | INC-008 | Orders expire seconds after being placed | SEV1 | Background job / queue behaviour | 1 | 4 | 0 | 8/10 |
 | INC-009 | Stock on hand does not match the warehouse | SEV3 | Data integrity across services | 1 | 7 | 0 | 8/10 |
 | INC-010 | Customers getting the same confirmation email repeatedly | SEV3 | Deployment / migration | 1 | 3 | 0 | 9/10 |
+| INC-011 | Checkout fails in bursts when a product is popular | SEV2 | Concurrency / race condition | 1 | 6 | 0 | 9/10 |
 
 ## Rolling numbers
 
-- Incidents closed: 10 / 12
+- Incidents closed: 11 / 12
 - Median time to mitigate: 6 min
-- Mean RCA score: 8.2 / 10
+- Mean RCA score: 8.3 / 10
 
 ## Category coverage
 
@@ -30,7 +31,7 @@ Target: at least 9 of the 12 categories in CLAUDE.md section 8.2.
 | 1 | Configuration / environment | INC-001 |
 | 2 | Application logic bug | INC-006 |
 | 3 | Database performance | INC-003 |
-| 4 | Concurrency / race condition | |
+| 4 | Concurrency / race condition | INC-011 |
 | 5 | Resource exhaustion | INC-005 |
 | 6 | Dependency failure or slowness | INC-004 |
 | 7 | Data integrity across services | INC-009 |

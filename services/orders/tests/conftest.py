@@ -73,6 +73,7 @@ class Upstream:
             side_effect=_reservation("RELEASED")
         )
         self.charge = router.post(f"{PAYMENTS_URL}/payments").mock(side_effect=_payment(True))
+        self._payment_status_routes: dict[str, respx.Route] = {}
 
     def product(self, sku: str, *, price_paise: int = 19900, stock: int = 10) -> dict[str, Any]:
         product = {
@@ -127,6 +128,39 @@ class Upstream:
 
     def payment_times_out(self) -> None:
         self.charge.mock(side_effect=httpx.ReadTimeout("timed out"))
+
+    def payment_actually_succeeded(
+        self, order_id: uuid.UUID, *, amount_paise: int = 19900
+    ) -> None:
+        """INC-004: payments-service completed the charge after orders-service had
+        already given up waiting on it. Used to test reconciliation, not checkout."""
+        self._payment_status_route(order_id).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "id": str(uuid.uuid4()),
+                    "order_id": str(order_id),
+                    "amount_paise": amount_paise,
+                    "status": "SUCCEEDED",
+                    "provider_ref": "PAY-0123456789ab",
+                    "failure_reason": None,
+                    "attempts": 1,
+                },
+            )
+        )
+
+    def no_payment_record(self, order_id: uuid.UUID) -> None:
+        self._payment_status_route(order_id).mock(
+            return_value=httpx.Response(
+                404, json=error_body("NOT_FOUND", f"no payment for order {order_id}")
+            )
+        )
+
+    def _payment_status_route(self, order_id: uuid.UUID) -> respx.Route:
+        key = str(order_id)
+        if key not in self._payment_status_routes:
+            self._payment_status_routes[key] = self.router.get(f"{PAYMENTS_URL}/payments/{key}")
+        return self._payment_status_routes[key]
 
 
 def _reservation(status: str, status_code: int = 200) -> Callable[[httpx.Request], httpx.Response]:

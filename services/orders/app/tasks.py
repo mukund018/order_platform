@@ -13,6 +13,7 @@ from sqlalchemy.exc import OperationalError
 from app import service
 from app.celery_app import celery_app
 from app.clients.inventory import get_inventory_client
+from app.clients.payments import get_payments_client
 from app.config import get_settings
 from app.db import SessionLocal
 from common.logging import get_logger
@@ -43,6 +44,12 @@ def send_confirmation(order_id: str) -> None:
 def expire_stale_orders() -> None:
     with SessionLocal() as session:
         service.expire_stale_orders(session, get_inventory_client())
+
+
+@celery_app.task(name="app.tasks.reconcile_payment_mismatches")
+def reconcile_payment_mismatches() -> None:
+    with SessionLocal() as session:
+        service.reconcile_payment_mismatches(session, get_payments_client())
 
 
 @celery_app.task(name="app.tasks.daily_sales_report")

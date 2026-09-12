@@ -80,6 +80,23 @@ groups:
             Either the reservation or the payment step is not completing.
           runbook: runbooks/orders-stuck-pending.md
 
+      # Added after INC-004. A customer was charged, the order was recorded FAILED, and
+      # every request-level metric (error rate, latency) looked completely normal - this
+      # is only visible from the reconciliation job's own counter.
+      - alert: PaymentReconciliationMismatch
+        expr: increase(payment_reconciliation_mismatch_total[15m]) > 0
+        for: 0m
+        labels:
+          severity: sev2
+        annotations:
+          summary: "A customer was charged for an order recorded as FAILED"
+          description: >-
+            {{ $value }} order(s) marked FAILED on a payment timeout were actually
+            charged by the gateway. This is real money held against a customer who was
+            told the order did not go through - do not wait for the next scheduled
+            check.
+          runbook: runbooks/payment-charged-but-order-failed.md
+
       - alert: CeleryTaskFailureRate
         expr: >-
           sum(rate(celery_tasks_total{result="failure"}[5m]))

@@ -26,6 +26,7 @@ from app import state
 from app.clients.inventory import InventoryClient, ReservationLine
 from app.clients.payments import PaymentsClient
 from app.config import get_settings
+from app.metrics import PAYMENT_RECONCILIATION_MISMATCH
 from app.models import (
     UNFINISHED_STATUSES,
     Notification,
@@ -59,6 +60,20 @@ EXPIRY_BATCH = 200
 # closes the order out anyway. Past this the stock is not coming back on its own, and an
 # order parked in PENDING only hides that from the people looking at order statuses.
 RELEASE_GIVE_UP = timedelta(hours=6)
+
+# INC-004: the exact message _fail stores when a payment call raises UpstreamTimeoutError
+# (see clients/base.py). There is no separate error-code column on orders to filter on
+# instead - this string is the only queryable signal, and it is only as safe as this
+# constant staying in sync with base.py's message. Worth a proper failure_code column
+# if this class of fault recurs.
+PAYMENT_TIMEOUT_FAILURE_REASON = "payments did not answer within the timeout"
+
+# How far back reconciliation looks each run. Wide enough to catch anything the previous
+# run's window edge might have missed, cheap enough to run often - this queries orders,
+# not payments, and calls out to payments-service once per candidate, not once per order
+# in the window.
+RECONCILE_LOOKBACK = timedelta(hours=24)
+RECONCILE_BATCH = 200
 
 
 def create_order(
@@ -230,6 +245,51 @@ def _expire_one(
     event = state.transition(session, order, OrderStatus.EXPIRED, reason=reason)
     _commit(session, event)
     return True
+
+
+def reconcile_payment_mismatches(
+    session: Session, payments: PaymentsClient, *, now: datetime | None = None
+) -> int:
+    """INC-004: find orders marked FAILED because payments timed out, and check
+    whether payments-service actually completed the charge anyway - a caller timeout
+    only means *we* stopped waiting, not that the request on the other end stopped.
+
+    Deliberately does not touch the order's status. By the time this runs, the
+    reservation this order held has long since been released and may already belong to
+    a different order - flipping this one back to CONFIRMED could silently oversell.
+    The correct action (refund, manual fulfilment, goodwill credit) depends on facts
+    this function cannot see, so it surfaces the mismatch loudly instead of guessing:
+    a log line with the amount and provider_ref, and a metric an alert can watch.
+    """
+    moment = now or utcnow()
+    cutoff = moment - RECONCILE_LOOKBACK
+    candidates = session.scalars(
+        select(Order.id)
+        .where(
+            Order.status == OrderStatus.FAILED,
+            Order.failure_reason == PAYMENT_TIMEOUT_FAILURE_REASON,
+            Order.created_at >= cutoff,
+        )
+        .order_by(Order.created_at)
+        .limit(RECONCILE_BATCH)
+    ).all()
+
+    mismatches = 0
+    for order_id in candidates:
+        payment = payments.get_status(order_id)
+        if payment is not None and payment.succeeded:
+            mismatches += 1
+            PAYMENT_RECONCILIATION_MISMATCH.inc()
+            log.error(
+                "payment_reconciliation_mismatch",
+                order_id=str(order_id),
+                amount_paise=payment.amount_paise,
+                provider_ref=payment.provider_ref,
+            )
+
+    if mismatches:
+        log.warning("payment_reconciliation_run", checked=len(candidates), mismatches=mismatches)
+    return mismatches
 
 
 def business_day_bounds(day: date, timezone: str) -> tuple[datetime, datetime]:

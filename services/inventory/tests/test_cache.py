@@ -41,9 +41,26 @@ def test_product_round_trip_and_ttl() -> None:
     cache.set_product("SKU-0001", {"sku": "SKU-0001", "stock": 2})
 
     assert cache.get_product("SKU-0001") == {"sku": "SKU-0001", "stock": 2}
-    # TTL is reported in whole seconds and has already started counting down, so the
-    # only safe assertion is that an expiry was set at all and it is the right size.
-    assert 0 < redis.ttl(product_key("SKU-0001")) <= 45
+    # TTL is reported in whole seconds, has already started counting down, and is
+    # jittered +/-20% (INC-012) - the only safe assertion is that an expiry was set
+    # at all and it falls within the jittered window, not the exact configured value.
+    assert 0 < redis.ttl(product_key("SKU-0001")) <= 45 * 1.2
+
+
+def test_ttl_is_jittered_so_keys_do_not_expire_in_lockstep() -> None:
+    """INC-012: every product key written around the same moment must not expire at
+    the same moment, or every in-flight request misses the cache simultaneously and
+    queues for the same, likely small, pool of database connections."""
+    redis = fakeredis.FakeRedis(decode_responses=True)
+    cache = ProductCache(redis, ttl=60)
+
+    for i in range(20):
+        cache.set_product(f"SKU-{i:04d}", {"sku": f"SKU-{i:04d}"})
+
+    ttls = {redis.ttl(product_key(f"SKU-{i:04d}")) for i in range(20)}
+
+    assert len(ttls) > 1, "all 20 keys got the exact same ttl - jitter is not spreading them"
+    assert all(48 <= ttl <= 72 for ttl in ttls)
 
 
 def test_invalidate_drops_the_product_and_the_list() -> None:

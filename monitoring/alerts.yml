@@ -50,6 +50,24 @@ groups:
             client-observed latency looks identical from here.
           runbook: runbooks/upstream-timeouts.md
 
+      # Added after INC-012. A short cache TTL and a small connection pool are each
+      # survivable alone; together, every key expiring in lockstep queues every
+      # in-flight request for too few connections, which reads as periodic latency
+      # spikes with nothing pegged in docker stats. This is the earlier signal.
+      - alert: DatabasePoolSaturated
+        expr: db_pool_connections{state="in_use"} >= on(service) db_pool_size
+        for: 2m
+        labels:
+          severity: sev2
+        annotations:
+          summary: "{{ $labels.service }}'s database connection pool is fully checked out"
+          description: >-
+            {{ $labels.service }} has had every pool connection in use for two
+            minutes. New requests queue for a connection, which shows up as latency
+            with nothing slow in the query itself - and as a hard error once a
+            request waits longer than the pool is willing to.
+          runbook: runbooks/db-pool-exhausted.md
+
       - alert: HighLatencyP95
         expr: >-
           histogram_quantile(

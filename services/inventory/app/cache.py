@@ -5,6 +5,7 @@ redis call here is wrapped: on failure we log a warning and fall back to the dat
 """
 
 import json
+import random
 from typing import Any
 
 from redis import Redis
@@ -16,6 +17,13 @@ from common.logging import get_logger
 log = get_logger(__name__)
 
 LIST_KEY = "inventory:products:all"
+
+# INC-012: every product key written around the same moment expires at the same
+# moment, so a TTL short enough to matter (paired with a pool small enough to matter)
+# turns into every in-flight request missing the cache at once - a stampede, not a
+# steady trickle of misses. +/-20% jitter spreads expiry out so keys do not fall due
+# in lockstep, without meaningfully changing how fresh the cache is on average.
+JITTER_FRACTION = 0.2
 
 
 def product_key(sku: str) -> str:
@@ -67,9 +75,13 @@ class ProductCache:
 
     def _write(self, key: str, payload: Any) -> None:
         try:
-            self._client.setex(key, self._ttl, json.dumps(payload))
+            self._client.setex(key, self._jittered_ttl(), json.dumps(payload))
         except RedisError as exc:
             log.warning("cache_write_failed", cache_key=key, error=str(exc))
+
+    def _jittered_ttl(self) -> int:
+        spread = int(self._ttl * JITTER_FRACTION)
+        return self._ttl if spread == 0 else self._ttl + random.randint(-spread, spread)
 
     def _drop(self, *keys: str) -> None:
         try:

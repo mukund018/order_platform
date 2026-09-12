@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app import service
@@ -11,10 +11,15 @@ router = APIRouter(prefix="/products", tags=["products"])
 
 @router.get("", response_model=list[ProductOut], summary="List products")
 def list_products(
+    limit: int | None = Query(None, ge=1, le=200),
     session: Session = Depends(get_session),
     cache: ProductCache = Depends(get_cache),
 ) -> list[ProductOut]:
-    return service.list_products(session, cache)
+    # The cache holds the whole catalogue under one key; limit is applied here, not
+    # threaded into the cache layer, so a smaller page still hits the same cache entry
+    # a full listing would.
+    products = service.list_products(session, cache)
+    return products[:limit] if limit is not None else products
 
 
 @router.get("/{sku}", response_model=ProductOut, summary="One product")

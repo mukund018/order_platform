@@ -59,6 +59,28 @@ def test_list_is_ordered_by_sku(client: TestClient, make_product: Callable[..., 
     assert [row["sku"] for row in response.json()] == ["SKU-0001", "SKU-0002", "SKU-0003"]
 
 
+def test_list_respects_limit(client: TestClient, make_product: Callable[..., Product]) -> None:
+    make_product("SKU-0001")
+    make_product("SKU-0002")
+    make_product("SKU-0003")
+
+    response = client.get("/products", params={"limit": 2})
+
+    assert response.status_code == 200
+    assert [row["sku"] for row in response.json()] == ["SKU-0001", "SKU-0002"]
+
+
+def test_list_without_limit_returns_everything(
+    client: TestClient, make_product: Callable[..., Product]
+) -> None:
+    make_product("SKU-0001")
+    make_product("SKU-0002")
+
+    response = client.get("/products")
+
+    assert len(response.json()) == 2
+
+
 def test_get_one_product(client: TestClient, make_product: Callable[..., Product]) -> None:
     make_product("SKU-0007", name="Toaster", price_paise=550000, stock=3)
 

@@ -32,15 +32,15 @@ only `uv`.
 
 ## Test suite
 
-**338 passing, 3 skipped, ruff clean across 108 files.** Run it with
+**343 passing, 3 skipped (SQLite mode), ruff clean across 110 files.** Run it with
 `.venv\Scripts\python.exe run_tests.py` (add `--cov` for the coverage column).
 
 | Component | Tests | Coverage |
 |---|---|---|
-| `common` | 38 | 81% |
-| `inventory` | 45 (+1 skipped) | 96% |
-| `payments` | 26 (+1 skipped) | 94% |
-| `orders` | 145 (+1 skipped) | 98%, **`state.py` 100%** |
+| `common` | 41 | 81% |
+| `inventory` | 47 (+1 skipped in SQLite mode; 48/48 against real Postgres) | 96% |
+| `payments` | 26 (+1 skipped in SQLite mode; 27/27 against real Postgres) | 94% |
+| `orders` | 145 (+1 skipped in SQLite mode; 146/146 against real Postgres) | 98%, **`state.py` 100%** |
 | `support` | 16 | 95% |
 | `incident-assistant` | 12 | — (context_loader only; main.py's /ask is verified live, not unit-tested — see Phase 4 open questions) |
 | `tools` | 50 | — |
@@ -53,7 +53,11 @@ real gap, listed under open questions.
 The three skips are the PostgreSQL-only concurrency tests, one per service. They need
 genuinely concurrent transactions against the same row, and SQLite takes a database-wide
 write lock that would pass them even against code that is wrong. Point `TEST_DATABASE_URL`
-at PostgreSQL to run them.
+at the dedicated `inventory_test` / `orders_test` / `payments_test` databases to run them —
+**never at the live `*_db` databases**: `common.testing.require_test_database` now refuses
+to run if you do, after a real incident where exactly that mistake dropped every table in
+all three live databases (see `docs/decisions.md`). All three suites verified passing
+against real PostgreSQL this session: 48/27/146.
 
 `run_tests.py` exists because all four services install a top-level package named `app`;
 one pytest process can only hold one of them, so each suite runs in its own subprocess.
@@ -199,6 +203,7 @@ Phase 3 is the part that gets defended in an interview.
 - **incident-assistant re-reads RCAs/runbooks from disk on every request, no cache** — the corpus is tiny and changes rarely; caching would be solving a problem that doesn't exist yet.
 - **`google-genai` over the originally-specified `google-generativeai`** — the latter is fully deprecated by Google; verified live before switching.
 - **Gemini model pinned to a dated name (`gemini-3.6-flash`), not a `-latest` alias** — the alias hit transient 503s under free-tier load in testing where the dated name did not.
+- **`common.testing.require_test_database` guards every service's schema-dropping test fixture** — added after a real incident where `TEST_DATABASE_URL` pointed at a live database dropped all its tables. Never trust a database name typed by hand twice.
 
 ## Open questions / blockers
 
@@ -211,8 +216,9 @@ Phase 3 is the part that gets defended in an interview.
 - **No consistency check comparing the API against the database.** INC-002's prevention item
   3, still outstanding. It is the signal that would turn "a category manager noticed after
   two days" into an alert.
-- **`GET /products` returns the whole catalogue and takes no `limit`.** FastAPI ignores
-  undeclared query parameters, so `?limit=3` silently returns all 50. Harmless at this size.
+- ~~**`GET /products` returns the whole catalogue and takes no `limit`.**~~ Fixed: an
+  optional `limit` query param, applied after the cache-aside read so it does not touch
+  the caching layer.
 - **support-service reads every log line on every request.** Fine at 17k lines and ~0.5s;
   it will not be at 500k. `SUPPORT_MAX_RECORDS` trims *after* reading, which does not help.
   Reading the tail of each file is the fix when it starts to hurt.
@@ -228,6 +234,7 @@ Phase 3 is the part that gets defended in an interview.
 
 | Date | What was done | Next |
 |---|---|---|
+| 2026-09-12 (4) | Full bug/error scan at Kumar's request. Fixed `GET /products` silently ignoring `?limit`. Ran the 3 Postgres-only concurrency tests for real — **and in doing so, pointed `TEST_DATABASE_URL` at the live `inventory_db`/`orders_db`/`payments_db` by mistake**, which dropped every table in all three (the test fixtures' session-teardown `Base.metadata.drop_all`). Recovered by clearing the stale `alembic_version` row and letting each service's real migration path recreate the schema on restart, then re-seeding — verified with a real end-to-end order afterward. Root-caused with `common/testing.py`'s `require_test_database`, now called by every service's schema fixture, which refuses to run against anything but SQLite or a `*_test`-suffixed database — proven against the exact scenario that caused this. All three concurrency suites then re-run correctly against the real `*_test` databases: 48/27/146 passing. Full writeup in `docs/decisions.md`. | Phase 3: INC-003 onward, run for real by the AI at Kumar's explicit request, then final polish |
 | 2026-09-12 (3) | Built Phase 4 (AI Incident Assistant) out of order, at Kumar's request, ahead of finishing Phase 3. `context_loader.py` written by Kumar with review (a real Windows-encoding bug caught and fixed: `read_text()` without `encoding="utf-8"` silently mangled the ₹ symbol in INC-002's RCA into 3-character mojibake). `main.py`, `config.py` and the UI built to close out the feature, reusing `common`'s logging/errors/health/metrics rather than bolting on something inconsistent. Switched away from the spec'd `google-generativeai` (fully deprecated) to `google-genai`, and from `gemini-1.5-flash` (retired, verified via a live 404) to `gemini-3.6-flash`. Verified live against the real Gemini API: correctly reconstructed INC-002's root cause from RCA text alone, honestly declined an unrelated question instead of guessing, and returned the platform's standard error envelope on a validation failure. 12 new tests for `context_loader`, wired into `run_tests.py`. Along the way: caught and fixed a bare-key `.env` file (missing the `GEMINI_API_KEY=` prefix) and a real gitignore gap (`gemini_api.env` at the repo root wasn't covered by any pattern) before either could reach the public GitHub repo. | Kumar's call: back to INC-003, or keep going on Phase 4's open questions (a test for `/ask`, wiring it into compose) |
 | 2026-09-12 (2) | Fixed the orders concurrency test. `git init`. Built support-service and the React storefront + ops console, both verified against live data. Built the Phase 3 chaos harness and twelve sealed faults covering all twelve categories. Worked INC-001 and INC-002 end to end with real measurements — including two honest corrections: INC-001's mechanism is client-side queueing, not a slow dependency, and INC-002's "missing" regression test already existed and already caught the bug, which moved the root cause to the absent test gate. Added `UpstreamTimeouts`, `upstream_calls_total`, two config guards, two runbooks and a pre-push hook. | INC-003 |
 | 2026-09-12 (1) | Docker installed. Ran `docs/verification.md` steps 0–7 on the live stack for the first time: M5 traffic run 100% clean, zero orphaned reservations, `ServiceDown` fired at exactly 60s, compensation verified by killing payments mid-flight, 444/444 notifications. | Rewrite `test_concurrency.py`, `git init`, then INC-001 |

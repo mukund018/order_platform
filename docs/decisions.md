@@ -339,3 +339,22 @@ Out of scope per CLAUDE.md section 10, written down so the reasoning is not lost
   stopgap — enable it with `git config core.hooksPath .githooks`. A hook is skippable
   with `--no-verify` and only protects the machine it is configured on, so it is a
   patch over the gap rather than a fix for it.
+
+## `common.testing.require_test_database` — a guardrail earned the hard way
+
+While verifying the platform, the three Postgres-only concurrency tests were run with
+`TEST_DATABASE_URL` pointed at the **live** `inventory_db`/`orders_db`/`payments_db`
+instead of the dedicated `inventory_test`/`orders_test`/`payments_test` databases that
+already existed for exactly this purpose. Every service's test suite has a session-scoped,
+`autouse=True` fixture that does `Base.metadata.drop_all(engine)` at teardown — so all
+three live databases lost their tables (`products`, `orders`, `payments`, ...), down to
+just `alembic_version`. Recovered by clearing the stale `alembic_version` row (it falsely
+claimed migrations were already applied) and restarting the services so their real
+migration path recreated the schema from scratch, then re-seeding.
+
+The actual fix is `require_test_database(engine)` (`common/testing.py`), called at the top
+of every service's schema fixture: it raises unless the engine is SQLite or the database
+name ends in `_test`. A live-looking name is refused before a single `CREATE TABLE` or
+`DROP TABLE` runs. Proven against the exact scenario that caused this: pointing
+`TEST_DATABASE_URL` at `inventory_db` again now fails fast with a clear message instead
+of dropping anything.

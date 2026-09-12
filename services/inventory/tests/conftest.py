@@ -26,10 +26,12 @@ from app.cache import ProductCache
 from app.db import SessionLocal, engine, get_session
 from app.main import app
 from app.models import Base, Product
+from common.testing import require_test_database
 
 
 @pytest.fixture(scope="session", autouse=True)
 def schema() -> Iterator[None]:
+    require_test_database(engine)
     Base.metadata.create_all(engine)
     yield
     Base.metadata.drop_all(engine)

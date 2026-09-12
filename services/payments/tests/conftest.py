@@ -25,6 +25,7 @@ from app.db import SessionLocal, engine, get_session  # noqa: E402
 from app.gateway import GatewayResult, get_gateway  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import Base, Payment  # noqa: E402
+from common.testing import require_test_database  # noqa: E402
 
 
 def approved(provider_ref: str = "PAY-0123456789ab", latency_ms: int = 12) -> GatewayResult:
@@ -55,6 +56,7 @@ class StubGateway:
 
 @pytest.fixture(scope="session", autouse=True)
 def _schema() -> Iterator[None]:
+    require_test_database(engine)
     Base.metadata.create_all(engine)
     yield
     Base.metadata.drop_all(engine)

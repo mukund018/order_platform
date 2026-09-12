@@ -41,6 +41,7 @@ from sqlalchemy.orm import Session
 from app.db import SessionLocal, engine, get_session
 from app.main import app
 from app.models import Base, Order, OrderItem, OrderStatus
+from common.testing import require_test_database
 
 
 def error_body(code: str, message: str) -> dict[str, Any]:
@@ -164,6 +165,7 @@ def _payment(
 
 @pytest.fixture(scope="session", autouse=True)
 def _schema() -> Iterator[None]:
+    require_test_database(engine)
     Base.metadata.create_all(engine)
     yield
     Base.metadata.drop_all(engine)

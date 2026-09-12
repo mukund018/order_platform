@@ -28,6 +28,16 @@ CELERY_TASKS = Counter(
     ["task", "result"],
 )
 
+# INC-001 was a client-side timeout: inventory was healthy and orders was hanging up on
+# it, so every http_requests_total series on both services looked normal while 2% of
+# checkouts failed. The outcome of an outbound call was only ever written to the logs.
+# This is the same fact as a metric, labelled by which dependency and how the call ended.
+UPSTREAM_CALLS = Counter(
+    "upstream_calls_total",
+    "Outbound calls to another service, by how they ended",
+    ["upstream", "outcome"],
+)
+
 
 class _OrderCollector:
     """Counts orders at scrape time.

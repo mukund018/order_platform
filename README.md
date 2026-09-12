@@ -262,10 +262,22 @@ branch would not help either.
 
 | | |
 |---|---|
-| Closed | 2 of 12 |
-| Median time to mitigate | 8 min |
-| Mean RCA score | 9.0 / 10 |
-| New alerts added because an incident exposed a gap | 1 (`UpstreamTimeouts`) |
+| Closed | 12 of 12 — all twelve categories covered |
+| Median time to mitigate | 6 min |
+| Mean RCA score | 8.3 / 10 |
+| New alerts added because an incident exposed a gap | 4 (`UpstreamTimeouts`, `PaymentReconciliationMismatch`, `DatabasePoolSaturated`, plus the config guards below) |
+| New startup config guards added | 4 (a timeout too small, a gateway latency ceiling too high, an expiry window too short, a cache-TTL/pool-size ceiling) |
+| New reconciliation/consistency tools built | 3 (`reconcile_payment_mismatches`, `tools/reconcile_stock.py`, `tools/check_schema_drift.py`) |
+
+**INC-001 and INC-002 were worked by Kumar**, guided/hinted, real evidence off the
+running stack — see below. **INC-003 through INC-012 were worked by the AI** at Kumar's
+explicit request partway through Phase 3, to get a fully working, fully-documented
+platform sooner. Same live stack, same tools, same real fixes and live verification — but
+INC-003 and INC-004 got the full blind diagnostic process, while INC-005 onward were
+resolved by revealing the injected fault immediately rather than diagnosing it blind.
+Every RCA says which one happened, in its own frontmatter and body — nothing here claims
+to be a diagnostic exercise that didn't happen. [PROGRESS.md](PROGRESS.md) has the full
+account.
 
 **[INC-001](incidents/INC-001/)** — checkout failing for 2% of customers. Both services
 healthy by their own measurements: inventory's p95 was 33ms and it logged zero errors. One
@@ -289,14 +301,19 @@ already exist and already catch the bug.
 
 ## Status
 
-**Phases 1 and 2 are built and verified on live infrastructure**, not just written: the
-traffic run, the alert firing, the compensation path, and the debugger attach are all in
-[docs/verification.md](docs/verification.md) with the command and the observed result.
+**Phases 1, 2 and 3 are built and verified on live infrastructure**, not just written: the
+traffic run, the alert firing, the compensation path, the debugger attach, and every one
+of the twelve incidents' fixes are backed by a command actually run and an output actually
+observed — [docs/verification.md](docs/verification.md) for Phases 1–2, each incident's
+own `investigation.md`/`rca.md` for Phase 3.
 
-Phase 3 is two of twelve incidents closed. The remaining ten are written, sealed and ready
-to run — that is deliberate: an incident is only worth anything if the person investigating
-does not already know the answer, so they are staying unopened until they are worked
-properly, one at a time.
+Phase 4 (the AI incident assistant) is built and verified live too, ahead of Phase 3 at
+Kumar's request — see the section above.
+
+What's left: final polish (a demo script, CV bullets from these real numbers, an
+interview-prep Q&A bank), and the Python fundamentals diagnostic from M0, which is still
+outstanding and worth doing before any of this comes up in an actual interview.
 
 [PROGRESS.md](PROGRESS.md) tracks what is done and what is not, including the things that
-are honestly still open.
+are honestly still open — including exactly which incidents Kumar worked himself versus
+which the AI closed, and why.

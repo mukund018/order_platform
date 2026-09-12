@@ -2,6 +2,7 @@ from collections.abc import Callable
 from typing import Any
 
 import fakeredis
+import pytest
 from fastapi.testclient import TestClient
 from redis.exceptions import ConnectionError as RedisConnectionError
 from sqlalchemy import update
@@ -47,20 +48,35 @@ def test_product_round_trip_and_ttl() -> None:
     assert 0 < redis.ttl(product_key("SKU-0001")) <= 45 * 1.2
 
 
-def test_ttl_is_jittered_so_keys_do_not_expire_in_lockstep() -> None:
+def test_ttl_is_jittered_so_keys_do_not_expire_in_lockstep(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """INC-012: every product key written around the same moment must not expire at
     the same moment, or every in-flight request misses the cache simultaneously and
-    queues for the same, likely small, pool of database connections."""
+    queues for the same, likely small, pool of database connections.
+
+    Deterministic, not statistical: a version of this test that samples real
+    randomness and asserts "the values are not all equal" is itself capable of a
+    (vanishingly rare, but real) false pass, which has no place in a suite this
+    project treats as the source of truth. Controlling the random draw instead makes
+    the assertion exact and the test unable to flake."""
+    calls = iter([-12, 0, 12])
+    monkeypatch.setattr(
+        "app.cache.random.randint", lambda _lo, _hi: next(calls)
+    )
     redis = fakeredis.FakeRedis(decode_responses=True)
     cache = ProductCache(redis, ttl=60)
 
-    for i in range(20):
-        cache.set_product(f"SKU-{i:04d}", {"sku": f"SKU-{i:04d}"})
+    cache.set_product("SKU-0001", {"sku": "SKU-0001"})
+    cache.set_product("SKU-0002", {"sku": "SKU-0002"})
+    cache.set_product("SKU-0003", {"sku": "SKU-0003"})
 
-    ttls = {redis.ttl(product_key(f"SKU-{i:04d}")) for i in range(20)}
-
-    assert len(ttls) > 1, "all 20 keys got the exact same ttl - jitter is not spreading them"
-    assert all(48 <= ttl <= 72 for ttl in ttls)
+    # A TTL counts down in real time from the instant it is set, so - same reasoning
+    # as test_product_round_trip_and_ttl above - only the upper bound is exact; a
+    # slow moment between the setex call and this read must not fail the assertion.
+    assert 46 <= redis.ttl(product_key("SKU-0001")) <= 48
+    assert 58 <= redis.ttl(product_key("SKU-0002")) <= 60
+    assert 70 <= redis.ttl(product_key("SKU-0003")) <= 72
 
 
 def test_invalidate_drops_the_product_and_the_list() -> None:

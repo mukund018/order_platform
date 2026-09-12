@@ -8,12 +8,13 @@ Phase 3 log. One row per incident, filled in when the RCA is scored.
 | INC-002 | Restocked products keep selling zero | SEV2 | Caching | 2 | 10 | 0 | 9/10 |
 | INC-003 | Checkout gets slower every hour | SEV2 | Database performance | 1 | 15 | 3 | 9/10 |
 | INC-004 | Customers charged for orders that failed | SEV2 | Dependency failure or slowness | 1 | 12 | 0 | 10/10 |
+| INC-005 | Random failures across all three services at once | SEV2 | Resource exhaustion | 1 | 3 | 0 | 6/10 |
 
 ## Rolling numbers
 
-- Incidents closed: 4 / 12
-- Median time to mitigate: 11 min
-- Mean RCA score: 9.3 / 10
+- Incidents closed: 5 / 12
+- Median time to mitigate: 10 min
+- Mean RCA score: 8.6 / 10
 
 ## Category coverage
 
@@ -25,7 +26,7 @@ Target: at least 9 of the 12 categories in CLAUDE.md section 8.2.
 | 2 | Application logic bug | |
 | 3 | Database performance | INC-003 |
 | 4 | Concurrency / race condition | |
-| 5 | Resource exhaustion | |
+| 5 | Resource exhaustion | INC-005 |
 | 6 | Dependency failure or slowness | INC-004 |
 | 7 | Data integrity across services | |
 | 8 | Background job / queue behaviour | |

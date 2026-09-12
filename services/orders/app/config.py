@@ -37,9 +37,7 @@ class Settings(BaseSettings):
     # The celery worker has no HTTP API, so it serves prometheus on a bare port of its own.
     metrics_port: int = Field(9100, alias="METRICS_PORT")
 
-    order_expiry_minutes: int = Field(
-        15, alias="ORDER_EXPIRY_MINUTES", ge=MIN_ORDER_EXPIRY_MINUTES
-    )
+    order_expiry_minutes: int = Field(15, alias="ORDER_EXPIRY_MINUTES", ge=MIN_ORDER_EXPIRY_MINUTES)
     business_timezone: str = Field("Asia/Kolkata", alias="BUSINESS_TIMEZONE")
 
     log_level: str = Field("INFO", alias="LOG_LEVEL")

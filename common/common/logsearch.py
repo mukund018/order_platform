@@ -20,6 +20,9 @@ from pathlib import Path
 from typing import Any
 
 ACCESS_EVENT = "http_request"
+# Group key for an error line whose "event" is a sentence from a third-party library
+# rather than one of our own event names.
+UNSTRUCTURED = "UNSTRUCTURED"
 ERROR_LEVELS = frozenset({"warning", "error", "critical"})
 STANDARD_KEYS = frozenset({"timestamp", "level", "service", "event", "request_id", "logger"})
 DURATION_UNITS = {"s": "seconds", "m": "minutes", "h": "hours", "d": "days"}
@@ -112,12 +115,23 @@ def filter_since(records: Iterable[dict[str, Any]], cutoff: datetime) -> list[di
 
 
 def error_code_of(record: dict[str, Any]) -> str:
+    """The label an error line is grouped under.
+
+    Our own events are short snake_case names, so they make good group keys. Lines from
+    libraries we do not control - celery's broker retries, for one - put a whole English
+    sentence in `event`, and those sentences differ by a timestamp or a retry delay, so
+    using them as keys gives one group per line and a useless dashboard. Anything with a
+    space in it is prose, not an event name, and is counted as one bucket instead.
+    """
     for key in ("error_code", "code"):
         value = record.get(key)
         if isinstance(value, str) and value:
             return value
     event = record.get("event")
-    return str(event) if event else "UNKNOWN"
+    if not event:
+        return "UNKNOWN"
+    text = str(event)
+    return text if " " not in text.strip() else UNSTRUCTURED
 
 
 def mentions(value: Any, needle: str) -> bool:

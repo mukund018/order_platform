@@ -1,21 +1,24 @@
 # Architecture
 
-Three FastAPI services, a Celery worker, one PostgreSQL instance holding three separate
-databases, and Redis doing two unrelated jobs. It is deliberately more moving parts than
-the problem needs: the point of the project is to have somewhere for realistic failures to
-happen.
+Three FastAPI services that run the business, a fourth that only observes them, a Celery
+worker, one PostgreSQL instance holding three separate databases, Redis doing two
+unrelated jobs, and a React front end that is both the shop and the support console. It is
+deliberately more moving parts than the problem needs: the point of the project is to have
+somewhere for realistic failures to happen.
 
 ## The shape of it
 
 ```mermaid
 flowchart LR
     client([curl / tools/traffic.py])
+    web[web<br/>React SPA behind nginx<br/>:5173]
 
     subgraph app[Application]
         orders[orders-service<br/>:8001]
         inventory[inventory-service<br/>:8002]
         payments[payments-service<br/>:8003]
         worker[celery worker<br/>+ beat]
+        support[support-service<br/>:8004]
     end
 
     subgraph data[State]
@@ -29,6 +32,17 @@ flowchart LR
     gateway{{simulated card gateway<br/>latency / decline / timeout knobs}}
 
     client --> orders
+    web -->|/api/*, same origin| orders
+    web --> inventory
+    web --> support
+    support -->|/ready probe| orders
+    support --> inventory
+    support --> payments
+    support -.->|reads logs/*.log| logs[(logs volume)]
+    orders -.-> logs
+    inventory -.-> logs
+    payments -.-> logs
+    worker -.-> logs
     orders -->|httpx, 2s timeout| inventory
     orders -->|httpx, 3s timeout| payments
     orders --> odb
@@ -44,7 +58,12 @@ flowchart LR
 
 Monitoring sits alongside it: Prometheus scrapes `/metrics` on each service and
 `worker:9100`, Grafana reads Prometheus, and every service writes the same JSON log lines
-to both stdout and `logs/<service>.log`, which is what `tools/logtool.py` parses.
+to both stdout and `logs/<service>.log`.
+
+Those log files have two readers. `tools/logtool.py` is the command-line one. support-service
+is the HTTP one, and it is what the ops console in the browser talks to. Both call the same
+functions in `common/logsearch.py`, so the console and the CLI can never disagree about what
+counts as an error or which request was slowest.
 
 ## Who owns what
 
@@ -53,6 +72,13 @@ to both stdout and `logs/<service>.log`, which is what `tools/logtool.py` parses
 | inventory | products, stock, reservations | nothing else |
 | payments | payments, the simulated gateway | nothing else |
 | orders | orders, items, events, notifications | inventory and payments, over HTTP only |
+| support | nothing at all | everyone, read-only |
+| web | nothing | the four above, through nginx |
+
+support-service is the odd one out and deliberately so. It has no database, no migrations
+and no writes: it reads the shared log volume read-only, calls the other services' own
+`/ready` endpoints, and reads the incident files off disk. A support tool that can change
+the system it is diagnosing is a support tool you cannot trust during an incident.
 
 The dependency arrows only ever point one way. inventory and payments have no idea orders
 exists — they cannot call back into it, and they do not share its database. That is what

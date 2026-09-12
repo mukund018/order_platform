@@ -24,7 +24,12 @@ def _logs_readable() -> None:
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    configure_logging(SERVICE_NAME, level=settings.log_level, log_dir=settings.log_dir)
+    # stdout only, with log_dir left unset on purpose. The other services write a file
+    # into the shared volume; this one reads that volume, and read-only at that. Writing
+    # its own log into the directory it searches would mean support-service reporting on
+    # itself - its warnings showing up in its own error board - which is noise at best
+    # and a feedback loop at worst. `docker compose logs support` is where its lines go.
+    configure_logging(SERVICE_NAME, level=settings.log_level, log_dir=None)
 
     app = FastAPI(
         title="support-service",

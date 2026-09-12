@@ -107,9 +107,7 @@ def test_slow_ranks_by_duration(client: TestClient, logs: LogWriter) -> None:
 def test_order_story_finds_the_id_wherever_it_appears(client: TestClient, logs: LogWriter) -> None:
     order_id = "9f8e7d6c-0000-1111-2222-333344445555"
     first, second = new_request_id(), new_request_id()
-    logs.line(
-        "orders", offset_s=0.0, event="order_created", order_id=order_id, request_id=first
-    )
+    logs.line("orders", offset_s=0.0, event="order_created", order_id=order_id, request_id=first)
     # Nested inside details rather than in a named field, which is where an order id
     # usually hides on the failure paths.
     logs.line(
@@ -158,9 +156,7 @@ def test_overview_reports_a_service_that_will_not_answer(client: TestClient) -> 
     assert services["payments"]["detail"] == "ConnectError"
 
 
-def test_incidents_never_expose_the_sealed_half(
-    client: TestClient, incidents_dir: Path
-) -> None:
+def test_incidents_never_expose_the_sealed_half(client: TestClient, incidents_dir: Path) -> None:
     faults = incidents_dir / "faults"
     faults.mkdir(parents=True)
     (faults / "INC-001.json").write_text(

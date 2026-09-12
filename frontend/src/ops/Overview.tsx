@@ -69,16 +69,27 @@ export default function Overview() {
         <Card>
           <Stat
             label="Services up"
-            value={`${services.filter((s) => s.ready).length}/${services.length || "—"}`}
-            tone={down.length || degraded.length ? "bad" : "good"}
-            note={overview.data ? `checked ${ago(overview.data.generated_at)}` : undefined}
+            // Until the first probe lands, say so. "0/—" reads like an outage.
+            value={
+              services.length === 0
+                ? "…"
+                : `${services.filter((s) => s.ready).length}/${services.length}`
+            }
+            tone={services.length === 0 ? undefined : down.length || degraded.length ? "bad" : "good"}
+            note={overview.data ? `checked ${ago(overview.data.generated_at)}` : "probing"}
           />
         </Card>
         <Card>
           <Stat
             label="Errors, last 15m"
-            value={overview.data?.errors_last_15m ?? "—"}
-            tone={(overview.data?.errors_last_15m ?? 0) > 0 ? "warn" : "good"}
+            value={overview.data?.errors_last_15m ?? "…"}
+            tone={
+              overview.data === undefined
+                ? undefined
+                : overview.data.errors_last_15m > 0
+                  ? "warn"
+                  : "good"
+            }
             note="warning level and above"
           />
         </Card>

@@ -18,10 +18,7 @@ import os
 
 os.environ["LOG_DIR"] = str(_LOGS)
 os.environ["SUPPORT_INCIDENTS_DIR"] = str(_INCIDENTS)
-# This service writes its own support.log into the very directory it reads, which is
-# right in production and awkward here: Windows holds the handle open, so the cleanup
-# below cannot delete it. Silencing it keeps the file empty and out of the assertions.
-os.environ["LOG_LEVEL"] = "CRITICAL"
+os.environ.setdefault("LOG_LEVEL", "WARNING")
 
 from fastapi.testclient import TestClient
 
@@ -35,9 +32,6 @@ NOW = datetime(2026, 9, 12, 10, 0, 0, tzinfo=UTC)
 def _clean() -> Iterator[None]:
     """Each test writes the log files it needs and nothing else sees them."""
     for path in _LOGS.glob("*.log"):
-        if path.name == "support.log":
-            # Held open by our own logging handler; it stays empty at CRITICAL.
-            continue
         path.unlink()
     for path in sorted(_INCIDENTS.rglob("*"), reverse=True):
         path.unlink() if path.is_file() else path.rmdir()

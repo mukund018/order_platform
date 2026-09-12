@@ -23,6 +23,7 @@ from typing import Any
 from common.logsearch import (
     ACCESS_EVENT,
     STANDARD_KEYS,
+    UNSTRUCTURED,
     ErrorGroup,
     TraceStep,
     build_trace,
@@ -41,6 +42,7 @@ from common.logsearch import (
 __all__ = [
     "ACCESS_EVENT",
     "STANDARD_KEYS",
+    "UNSTRUCTURED",
     "ErrorGroup",
     "TraceStep",
     "build_trace",

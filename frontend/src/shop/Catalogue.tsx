@@ -151,7 +151,7 @@ function ProductCard({ product }: { product: Product }) {
         )}
       </div>
       <button
-        className="primary"
+        className={soldOut ? "" : "primary"}
         disabled={soldOut}
         onClick={() => {
           cart.add(product);

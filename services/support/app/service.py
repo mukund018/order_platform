@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import Iterable
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -34,6 +35,7 @@ from app.schemas import (
     TraceStepOut,
 )
 from common.errors import NotFoundError, ValidationFailedError
+from common.logging import get_logger
 from common.logsearch import (
     STANDARD_KEYS,
     ErrorGroup,
@@ -47,7 +49,6 @@ from common.logsearch import (
     read_records,
     sort_records,
 )
-from common.logging import get_logger
 
 log = get_logger(__name__)
 
@@ -98,8 +99,7 @@ def trace(settings: Settings, request_id: str) -> TraceOut:
         )
 
     out = [
-        TraceStepOut(**_to_record(step.record).model_dump(), gap_ms=step.gap_ms)
-        for step in steps
+        TraceStepOut(**_to_record(step.record).model_dump(), gap_ms=step.gap_ms) for step in steps
     ]
     first, last = steps[0].timestamp, steps[-1].timestamp
     span_ms = None
@@ -163,10 +163,16 @@ def probe(settings: Settings) -> OverviewOut:
     The console polls this, so it has to answer even when half the platform is down -
     a probe failure is a result, not an exception.
     """
-    results: list[ServiceHealth] = []
-    with httpx.Client(timeout=settings.probe_timeout_s) as client:
-        for name, url in settings.services.items():
-            results.append(_probe_one(client, name, url))
+    targets = list(settings.services.items())
+    # In parallel, not in a loop. Serially, a console refresh costs the sum of three
+    # /ready calls, and the moment one service is wedged that sum becomes the probe
+    # timeout - so the screen you look at to find out what is down would itself be the
+    # slowest thing on the screen.
+    with (
+        httpx.Client(timeout=settings.probe_timeout_s) as client,
+        ThreadPoolExecutor(max_workers=len(targets) or 1) as pool,
+    ):
+        results = list(pool.map(lambda item: _probe_one(client, *item), targets))
 
     records, malformed = _load(settings)
     recent = filter_since(records, _cutoff(ERROR_WINDOW))
@@ -184,9 +190,7 @@ def _probe_one(client: httpx.Client, name: str, url: str) -> ServiceHealth:
     try:
         response = client.get(f"{url}/ready")
     except httpx.RequestError as exc:
-        return ServiceHealth(
-            name=name, url=url, live=False, ready=False, detail=type(exc).__name__
-        )
+        return ServiceHealth(name=name, url=url, live=False, ready=False, detail=type(exc).__name__)
 
     elapsed = round((time.perf_counter() - started) * 1000, 2)
     body = _json_or_none(response)

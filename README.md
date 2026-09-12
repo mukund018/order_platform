@@ -238,13 +238,65 @@ the expected result for every acceptance criterion.
 
 ---
 
+## Phase 3 — breaking it on purpose
+
+Twelve injected production faults, covering all twelve categories: configuration, a logic
+bug, database performance, a race condition, resource exhaustion, a slow dependency, data
+integrity across services, queue behaviour, a migration, timezones, caching, and a
+retry/timeout interaction. Two are intermittent. Three produce no errors at all.
+
+```powershell
+.venv\Scripts\python.exe tools\chaos.py list
+.venv\Scripts\python.exe tools\chaos.py start INC-003     # injects it, prints the ticket
+.venv\Scripts\python.exe tools\chaos.py hint  INC-003     # one tier, and it is counted
+.venv\Scripts\python.exe tools\chaos.py revert INC-003    # mitigate
+.venv\Scripts\python.exe tools\chaos.py reveal INC-003    # refused until rca.md is written
+.venv\Scripts\python.exe tools\chaos.py close  INC-003 --sev SEV2 --tta 3 --ttm 12 --score 8
+```
+
+The half of each fault that would give it away is base64 in
+`incidents/faults/INC-0XX.json`, so `grep` cannot spill it and `reveal` will not print it
+until an RCA exists. Four of the twelve touch no application code at all — environment
+values, a compose override, or rows in the database — so reading the diff on the incident
+branch would not help either.
+
+| | |
+|---|---|
+| Closed | 2 of 12 |
+| Median time to mitigate | 8 min |
+| Mean RCA score | 9.0 / 10 |
+| New alerts added because an incident exposed a gap | 1 (`UpstreamTimeouts`) |
+
+**[INC-001](incidents/INC-001/)** — checkout failing for 2% of customers. Both services
+healthy by their own measurements: inventory's p95 was 33ms and it logged zero errors. One
+`logtool trace` showed inventory returning **200 in 159ms for a request orders had already
+abandoned at 252ms** — and logging it 28ms after the customer had been told the order
+failed. A timeout bounds what the *client* observes, queueing included, not what the server
+measures. Fix: the service now refuses to start with a timeout too small to survive, and the
+outcome of every outbound call is a metric rather than only a log line.
+
+**[INC-002](incidents/INC-002/)** — the "no errors anywhere, and we are losing money" one.
+Reported by a category manager, not by monitoring, two days late. Restocked products kept
+reading as sold out: **12 SKUs, 720 units, ₹17,85,600 of stock invisible to customers**,
+with zero errors logged. The write path had stopped invalidating the cache while the TTL was
+raised thirty-fold — and because *buying* a product does invalidate it, a line that read as
+sold out could never be repaired by the one event that would have repaired it. The RCA is
+worth reading for two mistakes it records: a test order that destroyed the evidence it was
+measuring, and a first draft that blamed a missing regression test which turned out to
+already exist and already catch the bug.
+
+---
+
 ## Status
 
-Phases 1 and 2 are built. Phase 3 — twelve injected production incidents, each triaged,
-investigated, escalated, fixed and written up as an RCA — is the next piece of work, and
-is what [incidents/](incidents/) and the templates in it are for.
+**Phases 1 and 2 are built and verified on live infrastructure**, not just written: the
+traffic run, the alert firing, the compensation path, and the debugger attach are all in
+[docs/verification.md](docs/verification.md) with the command and the observed result.
 
-Two things are honestly not yet verified, because Docker is not installed on the machine
-this was written on: the live end-to-end traffic run, and watching an alert actually fire.
-Both are step-by-step in [docs/verification.md](docs/verification.md), and
-[PROGRESS.md](PROGRESS.md) tracks what is done and what is not.
+Phase 3 is two of twelve incidents closed. The remaining ten are written, sealed and ready
+to run — that is deliberate: an incident is only worth anything if the person investigating
+does not already know the answer, so they are staying unopened until they are worked
+properly, one at a time.
+
+[PROGRESS.md](PROGRESS.md) tracks what is done and what is not, including the things that
+are honestly still open.

@@ -121,9 +121,7 @@ def reserve(
         )
 
     reservations: list[StockReservation] = []
-    # Sku order, always. Two orders holding the same two products in opposite order
-    # would otherwise be able to deadlock each other.
-    for item in sorted(items, key=lambda item: item.sku):
+    for item in items:
         product = products[item.sku]
         updated = session.execute(
             update(Product)

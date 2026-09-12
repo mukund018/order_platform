@@ -21,9 +21,7 @@ class Settings(BaseSettings):
 
     inventory_url: str = Field("http://inventory:8002", alias="INVENTORY_URL")
     payments_url: str = Field("http://payments:8003", alias="PAYMENTS_URL")
-    inventory_timeout_s: float = Field(
-        2.0, alias="INVENTORY_TIMEOUT_S", ge=MIN_UPSTREAM_TIMEOUT_S
-    )
+    inventory_timeout_s: float = Field(2.0, alias="INVENTORY_TIMEOUT_S", ge=MIN_UPSTREAM_TIMEOUT_S)
     payments_timeout_s: float = Field(3.0, alias="PAYMENTS_TIMEOUT_S", ge=MIN_UPSTREAM_TIMEOUT_S)
 
     celery_broker_url: str = Field("redis://redis:6379/1", alias="CELERY_BROKER_URL")

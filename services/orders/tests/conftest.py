@@ -129,9 +129,7 @@ class Upstream:
     def payment_times_out(self) -> None:
         self.charge.mock(side_effect=httpx.ReadTimeout("timed out"))
 
-    def payment_actually_succeeded(
-        self, order_id: uuid.UUID, *, amount_paise: int = 19900
-    ) -> None:
+    def payment_actually_succeeded(self, order_id: uuid.UUID, *, amount_paise: int = 19900) -> None:
         """INC-004: payments-service completed the charge after orders-service had
         already given up waiting on it. Used to test reconciliation, not checkout."""
         self._payment_status_route(order_id).mock(

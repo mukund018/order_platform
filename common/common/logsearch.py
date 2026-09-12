@@ -83,13 +83,35 @@ def parse_line(line: str) -> dict[str, Any] | None:
     return record if isinstance(record, dict) else None
 
 
-def read_records(log_dir: Path, pattern: str = "*.log") -> tuple[list[dict[str, Any]], int]:
-    """All records from the log directory, plus a count of lines that would not parse."""
+def read_records(
+    log_dir: Path, pattern: str = "*.log", tail_bytes: int | None = None
+) -> tuple[list[dict[str, Any]], int]:
+    """All records from the log directory, plus a count of lines that would not parse.
+
+    `tail_bytes`, when given, bounds the read to the last N bytes of each file instead
+    of the whole thing, so cost stays flat as a file grows instead of scaling with its
+    entire history - discovered live, the hard way: after a day's worth of traffic and
+    incident testing, four log files totalling ~280k lines took support-service's
+    `/overview` from instant to 15-50+ seconds, entirely inside this function, with
+    every dependency it calls answering in under half a second. The line straddling
+    the seek point is a partial line and is discarded, not counted as malformed.
+
+    `None` (the default) reads the whole file - `tools/logtool.py`'s CLI keeps this
+    default, because a person running it by hand is explicitly asking for the full
+    history and can decide whether to wait for it. support-service's HTTP API, which
+    nothing is waiting for a human to tolerate, does not get that default; see its
+    own `SUPPORT_LOG_TAIL_BYTES` setting.
+    """
     records: list[dict[str, Any]] = []
     malformed = 0
     for path in sorted(log_dir.glob(pattern)):
-        with path.open(encoding="utf-8", errors="replace") as handle:
-            for line in handle:
+        size = path.stat().st_size
+        with path.open("rb") as handle:
+            if tail_bytes is not None and size > tail_bytes:
+                handle.seek(size - tail_bytes)
+                handle.readline()  # discard the partial line the seek landed inside
+            for raw_line in handle:
+                line = raw_line.decode("utf-8", errors="replace")
                 record = parse_line(line)
                 if record is None:
                     if line.strip():

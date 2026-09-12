@@ -22,8 +22,17 @@ class Settings(BaseSettings):
     probe_timeout_s: float = Field(2.0, alias="SUPPORT_PROBE_TIMEOUT_S")
 
     # Reading every log line on every request is fine at this scale and wrong at any
-    # other, so the window is capped rather than unbounded.
+    # other, so the window is capped rather than unbounded. This one trims *after*
+    # reading everything - it bounds what a response contains, not what reading costs.
     max_records: int = Field(50_000, alias="SUPPORT_MAX_RECORDS")
+
+    # This one bounds the read itself: the last N bytes of each log file, not the whole
+    # thing. ~20MB per file comfortably covers many hours at this platform's log volume
+    # (roughly 300 bytes/line) while keeping cost flat no matter how large the file
+    # grows beyond that - discovered live when four files past 280k lines combined took
+    # /overview from instant to 15-50+ seconds with every dependency answering in under
+    # half a second.
+    log_tail_bytes: int = Field(20_000_000, alias="SUPPORT_LOG_TAIL_BYTES")
 
     incidents_dir: str = Field("/app/incidents", alias="SUPPORT_INCIDENTS_DIR")
 

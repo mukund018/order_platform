@@ -87,6 +87,38 @@ def test_read_records_on_empty_dir(tmp_path: Path) -> None:
     assert logtool.read_records(tmp_path) == ([], 0)
 
 
+def test_tail_bytes_none_reads_the_whole_file_as_before(tmp_path: Path) -> None:
+    """The CLI's own default. A person running logtool.py by hand is explicitly asking
+    for the full history and can decide whether to wait for it."""
+    write_log(tmp_path / "orders.log", [record(i, event="http_request") for i in range(50)])
+
+    records, _ = logtool.read_records(tmp_path, tail_bytes=None)
+
+    assert len(records) == 50
+
+
+def test_tail_bytes_bounds_a_large_file_to_its_last_lines(tmp_path: Path) -> None:
+    """support-service's own default, discovered live: reading cost has to stay flat
+    as a file grows, or /overview goes from instant to tens of seconds."""
+    write_log(tmp_path / "orders.log", [record(i, event="http_request", n=i) for i in range(200)])
+    file_size = (tmp_path / "orders.log").stat().st_size
+
+    records, malformed = logtool.read_records(tmp_path, tail_bytes=file_size // 4)
+
+    assert 0 < len(records) < 200
+    # The oldest lines are the ones dropped, not the newest.
+    assert records[-1]["n"] == 199
+    assert malformed == 0, "the partial line the seek lands inside must be discarded, not counted"
+
+
+def test_tail_bytes_larger_than_the_file_reads_everything(tmp_path: Path) -> None:
+    write_log(tmp_path / "orders.log", [record(i, event="http_request") for i in range(10)])
+
+    records, _ = logtool.read_records(tmp_path, tail_bytes=10_000_000)
+
+    assert len(records) == 10
+
+
 def test_filter_since_keeps_only_the_window() -> None:
     now = datetime.now(UTC)
     records = [

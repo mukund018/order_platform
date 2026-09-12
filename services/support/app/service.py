@@ -68,7 +68,7 @@ def _load(settings: Settings) -> tuple[list[dict[str, Any]], int]:
         # not read as a broken support service.
         log.warning("log_dir_missing", log_dir=str(directory))
         return [], 0
-    records, malformed = read_records(directory)
+    records, malformed = read_records(directory, tail_bytes=settings.log_tail_bytes)
     if len(records) > settings.max_records:
         records = sort_records(records)[-settings.max_records :]
     return records, malformed

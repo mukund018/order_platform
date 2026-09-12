@@ -2,8 +2,10 @@
 
 ## Current position
 
-Phase: 3 + 4 | Next task: **Final polish** (demo script, CV bullets, interview prep) —
-Phase 3 is now fully closed.
+Phase: 3 + 4 + final polish, all complete | Next task: the M0 Python fundamentals
+diagnostic (comprehensions, dataclasses, custom exceptions, type hints, context managers,
+decorators, async/await, reading a traceback) — the one item from the original plan still
+genuinely outstanding.
 
 **Phase 3 is complete: 12 of 12 incidents closed**, all 12 categories in CLAUDE.md §8.2
 covered, median time-to-mitigate 6 minutes, mean RCA score 8.3/10. INC-001 and INC-002
@@ -197,7 +199,7 @@ Phase 3 is the part that gets defended in an interview.
 - [x] Web: storefront + ops console, and support-service behind it
 - [x] Phase 3 harness + twelve sealed faults
 - [x] INC-001 … INC-012 — **12 of 12 closed** (INC-001, INC-002 by Kumar; INC-003 – INC-012 by the AI) ← Phase 3 done
-- [ ] Final polish (demo script, interview prep, CV bullets)
+- [x] Final polish (demo script, interview prep, CV bullets) ← project complete except the M0 diagnostic
 - [x] Phase 4 — AI Incident Assistant (`incident-assistant/`, port 8005), verified live — **built ahead of finishing Phase 3, at Kumar's request**
 
 ## Decisions made (one line each, details in docs/decisions.md)
@@ -252,6 +254,7 @@ Phase 3 is the part that gets defended in an interview.
 
 | Date | What was done | Next |
 |---|---|---|
+| 2026-09-12 (8) | Final polish. `docs/demo.md` (a 5-minute live walkthrough built around re-running INC-001), `docs/cv-bullets.md` (real numbers only, with an explicit authorship-honesty note so nothing implies Kumar solo-diagnosed INC-003–012), and `docs/interview-prep.md` (30 questions, framed as study material to internalize and rephrase, not a script to recite). Also found and fixed a genuinely flaky test introduced during INC-012's fix (exact-equality assertion against a TTL that counts down in real time) — verified the fix with 15 consecutive stress-test runs before trusting it, matching the same rigor applied to every incident's regression test this session. **The project is now complete except the M0 Python diagnostic.** | The M0 diagnostic, whenever Kumar wants to do it |
 | 2026-09-12 (7) | Closed INC-005 through INC-012, fast-tracked per Kumar's request (`chaos.py reveal --force` immediately, not blind investigation — recorded honestly in every RCA). **Phase 3 complete: 12/12, all categories covered, median TTM 6min, mean RCA 8.3/10.** Real fixes and permanent platform additions, not just docs: INC-005 removed a compose override capping Postgres at 20 connections; INC-006 fixed an off-by-one (`stock > qty` → `>= qty`) that stranded every SKU's last unit, verified by buying a real last unit end to end; INC-007 fixed `previous_business_day()` computing "yesterday" in UTC instead of the business timezone (an existing test had already caught this and was failing); INC-008 added a startup guard (`MIN_ORDER_EXPIRY_MINUTES`) after `ORDER_EXPIRY_MINUTES=0` raced the expiry job against in-flight orders (SEV1); INC-009 built `tools/reconcile_stock.py` (a new `GET /reservations/active` endpoint plus a cross-service reconciliation tool) and released 15 real stranded reservations across 5 SKUs, catching and fixing a bug in the tool itself along the way; INC-010 built `tools/check_schema_drift.py` (wrapping `alembic check`) after a dropped unique constraint caused duplicate confirmation emails — verified round-trip by deliberately re-breaking the schema and confirming the tool caught it; INC-011 restored SKU-ordered locking after a deadlock bug, with a regression test verified both ways (fails on broken code, passes on fixed); INC-012 (the finale) found two independently-safe config changes combining into a cache-stampede, fixed via TTL jitter plus a new `DatabasePoolSaturated` alert. Also recovered mid-session from Docker Desktop's backend becoming fully unresponsive (500s on every API call) by cleanly restarting it — no data lost. | Final polish: demo script, CV bullets, interview prep |
 | 2026-09-12 (6) | Closed INC-004 (SEV2, TTM 12min, 0 hints, RCA 10/10) — worked by the AI. Root cause: `GATEWAY_LATENCY_MS_MAX=4200` vs `PAYMENTS_TIMEOUT_S=3.0` — ~29% of payments succeeded after orders-service had already given up and marked the order FAILED. Reconciled `orders_db` against `payments_db` directly: 148 of 156 timed-out orders were actually charged, ₹15,32,637. Mitigated the config, added a startup guard (`MAX_REALISTIC_GATEWAY_LATENCY_MS`), and built the reconciliation job decision #9 called for (`reconcile_payment_mismatches`, a beat task every 15 min that reports mismatches without auto-correcting order status) plus a new alert and 6 regression tests. Verified live: found 191 real mismatches in the existing backlog. Matched the actual injected fault and its recommended fix exactly on reveal. | INC-005 |
 | 2026-09-12 (5) | Closed INC-003 (SEV2, TTM 15min, 3 hints, RCA 9/10) — worked by the AI at Kumar's request, same tools and rigor as INC-001/002, labeled honestly. Root cause: `ix_stock_reservations_order_id` existed in the model and migration but was missing from the live database (dropped out-of-band) — every reserve/commit/release did a full table scan of a table that only grows. Found via `pg_stat_statements` sorted by `total_exec_time` (every individual call looked cheap by *mean*) then `EXPLAIN ANALYZE` confirming `Seq Scan`. Mitigated by recreating the index; added a plan-shape regression test (`test_reservation_query_plan.py`) and `runbooks/slow-query-missing-index.md`. Investigation independently matched the actual injected fault exactly on reveal, including the prevention recommendation. | INC-004 |

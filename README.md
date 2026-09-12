@@ -310,9 +310,13 @@ own `investigation.md`/`rca.md` for Phase 3.
 Phase 4 (the AI incident assistant) is built and verified live too, ahead of Phase 3 at
 Kumar's request — see the section above.
 
-What's left: final polish (a demo script, CV bullets from these real numbers, an
-interview-prep Q&A bank), and the Python fundamentals diagnostic from M0, which is still
-outstanding and worth doing before any of this comes up in an actual interview.
+Final polish is done: [docs/demo.md](docs/demo.md) is a 5-minute live walkthrough script,
+[docs/cv-bullets.md](docs/cv-bullets.md) draws CV bullets from the real numbers above with
+an honest note on authorship, and [docs/interview-prep.md](docs/interview-prep.md) is a
+30-question bank to study from, not recite.
+
+What's actually left: the Python fundamentals diagnostic from M0, still outstanding and
+worth doing before any of this comes up in a real interview.
 
 [PROGRESS.md](PROGRESS.md) tracks what is done and what is not, including the things that
 are honestly still open — including exactly which incidents Kumar worked himself versus

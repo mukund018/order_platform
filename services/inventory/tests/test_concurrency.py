@@ -93,3 +93,49 @@ def test_twenty_threads_cannot_oversell_ten_units(
     assert {row.status for row in rows} == {ReservationStatus.ACTIVE}
     # One reservation per order, not ten rows for whichever order happened to win.
     assert len({row.order_id for row in rows}) == STOCK
+
+
+DEADLOCK_PAIRS = 15
+DEADLOCK_STOCK = 1000
+
+
+def _reserve_pair(
+    sessions: sessionmaker[Session],
+    barrier: Barrier,
+    lines: list[ReservationItem],
+) -> str:
+    with sessions() as session:
+        barrier.wait(timeout=BARRIER_TIMEOUT_S)
+        service.reserve(session, uuid.uuid4(), lines)
+        session.commit()
+    return "RESERVED"
+
+
+def test_opposite_order_multi_item_reservations_do_not_deadlock(
+    make_product: Callable[..., Product],
+    threaded_sessions: sessionmaker[Session],
+) -> None:
+    """INC-011: reserve() must lock a multi-item reservation's rows in a fixed order
+    (sku order). Without that, two concurrent orders holding the same two products in
+    opposite order can each hold one row and wait for the other - Postgres detects the
+    cycle and kills one transaction with a deadlock error, surfacing as a 500 for a
+    customer who did nothing wrong."""
+    product_a = make_product("SKU-0001", stock=DEADLOCK_STOCK)
+    product_b = make_product("SKU-0002", stock=DEADLOCK_STOCK)
+    a = ReservationItem(sku=product_a.sku, qty=1)
+    b = ReservationItem(sku=product_b.sku, qty=1)
+    forward = [a, b]
+    backward = [b, a]
+
+    barrier = Barrier(DEADLOCK_PAIRS * 2)
+    with ThreadPoolExecutor(max_workers=DEADLOCK_PAIRS * 2) as pool:
+        futures = [
+            pool.submit(_reserve_pair, threaded_sessions, barrier, lines)
+            for _ in range(DEADLOCK_PAIRS)
+            for lines in (forward, backward)
+        ]
+        # A deadlock loser raises rather than returning - .result() re-raises it here,
+        # which is the failure this test exists to catch.
+        outcomes = [future.result() for future in futures]
+
+    assert outcomes == ["RESERVED"] * (DEADLOCK_PAIRS * 2)

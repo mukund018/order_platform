@@ -313,7 +313,7 @@ def previous_business_day(timezone: str) -> date:
     Beat fires the report at 00:05 local time, so the day to report on is the one before
     the local date - which around midnight is not the same as the day before in UTC.
     """
-    return datetime.now(ZoneInfo(timezone)).date() - timedelta(days=1)
+    return datetime.now(UTC).date() - timedelta(days=1)
 
 
 def daily_report(session: Session, day: date) -> DailyReport:

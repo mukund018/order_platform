@@ -142,3 +142,26 @@ def test_a_dead_redis_falls_back_to_the_database(
     assert client.get("/products").json()[0]["stock"] == 7
     assert client.get("/products/SKU-0001").json()["stock"] == 7
     assert client.patch("/products/SKU-0001/stock", json={"delta": 1}).status_code == 200
+
+
+def test_a_stock_write_is_visible_on_the_very_next_read(
+    client: TestClient, make_product: Callable[..., Product]
+) -> None:
+    """INC-002, stated as behaviour rather than as caching.
+
+    `test_stock_adjustment_invalidates_both_keys` above already covers this and already
+    failed against the incident - verified by re-applying the fault. This one exists
+    because that test is named after the *mechanism*: if the caching strategy ever changes
+    to write-through, or to a different key layout, that name stops describing anything a
+    customer cares about. The promise that has to survive any such change is this one.
+    """
+    make_product("SKU-0001", stock=0)
+    # A customer browses the sold-out product, which is what populates the cache.
+    assert client.get("/products/SKU-0001").json()["stock"] == 0
+    assert client.get("/products").json()[0]["stock"] == 0
+
+    client.patch("/products/SKU-0001/stock", json={"delta": 60})
+
+    # No sleep, no second attempt: the very next read has to tell the truth.
+    assert client.get("/products/SKU-0001").json()["stock"] == 60
+    assert client.get("/products").json()[0]["stock"] == 60

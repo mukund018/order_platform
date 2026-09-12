@@ -1,0 +1,32 @@
+#!/bin/sh
+# Run the gate that INC-002 proved nobody remembers to run.
+#
+# The invalidation bug in INC-002 was already covered by a passing test. The test did not
+# fail to catch it - it was never run before the change reached a live environment. There
+# is no CI on this project (see docs/decisions.md, "Later"), so this hook is the cheapest
+# thing that closes that hole.
+#
+# Enable it once per clone:
+#     git config core.hooksPath .githooks
+#
+# Skip it deliberately, for a work-in-progress branch:
+#     git push --no-verify
+set -e
+
+if [ -x .venv/Scripts/python.exe ]; then
+    PYTHON=.venv/Scripts/python.exe
+elif [ -x .venv/bin/python ]; then
+    PYTHON=.venv/bin/python
+else
+    echo "pre-push: no project venv found, skipping checks" >&2
+    exit 0
+fi
+
+echo "pre-push: ruff"
+"$PYTHON" -m ruff check .
+"$PYTHON" -m ruff format --check .
+
+echo "pre-push: tests"
+"$PYTHON" run_tests.py
+
+echo "pre-push: ok"

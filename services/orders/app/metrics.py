@@ -38,6 +38,14 @@ UPSTREAM_CALLS = Counter(
     ["upstream", "outcome"],
 )
 
+# INC-004: an order marked FAILED on a payment timeout where payments-service actually
+# completed the charge. Any nonzero value here is real money held against a customer
+# who was told the order failed - this should page someone, not wait for a dashboard.
+PAYMENT_RECONCILIATION_MISMATCH = Counter(
+    "payment_reconciliation_mismatch_total",
+    "Orders marked FAILED on a payment timeout that payments-service actually charged",
+)
+
 
 class _OrderCollector:
     """Counts orders at scrape time.

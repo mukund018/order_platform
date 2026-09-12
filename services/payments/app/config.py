@@ -3,6 +3,16 @@ from functools import lru_cache
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# INC-004: orders-service's PAYMENTS_TIMEOUT_S defaults to 3.0s. A gateway that can
+# legitimately take longer than that, even rarely, guarantees a nonzero rate of orders
+# giving up on a payment that goes on to succeed anyway - charged, but recorded FAILED.
+# This is not a guess at realistic gateway latency; it is the ceiling below which the
+# caller's timeout can actually bound the wait, with headroom for the rest of the
+# request. A value above this can only produce mismatched charges, so - same principle
+# as MIN_UPSTREAM_TIMEOUT_S in orders/app/config.py - it is a configuration error, and
+# the right place to find out is at startup, not from a finance escalation.
+MAX_REALISTIC_GATEWAY_LATENCY_MS = 2000
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -15,7 +25,9 @@ class Settings(BaseSettings):
     log_dir: str | None = Field(None, alias="LOG_DIR")
 
     gateway_latency_ms_min: int = Field(50, alias="GATEWAY_LATENCY_MS_MIN", ge=0)
-    gateway_latency_ms_max: int = Field(300, alias="GATEWAY_LATENCY_MS_MAX", ge=0)
+    gateway_latency_ms_max: int = Field(
+        300, alias="GATEWAY_LATENCY_MS_MAX", ge=0, le=MAX_REALISTIC_GATEWAY_LATENCY_MS
+    )
     gateway_failure_rate: float = Field(0.05, alias="GATEWAY_FAILURE_RATE", ge=0.0, le=1.0)
     gateway_timeout_rate: float = Field(0.0, alias="GATEWAY_TIMEOUT_RATE", ge=0.0, le=1.0)
     # Longer than any caller timeout in the platform, so "timeout mode" really does

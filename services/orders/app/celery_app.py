@@ -31,6 +31,10 @@ SERVICE_NAME = "worker"
 EXPIRY_INTERVAL_S = 60.0
 REPORT_HOUR = 0
 REPORT_MINUTE = 5
+# INC-004: frequent enough that a mismatch is caught same-day, not urgent enough to be
+# worth running on every tick - each run is one query plus one payments-service call
+# per FAILED-on-timeout order in the lookback window, not per order in the system.
+RECONCILE_INTERVAL_S = 900.0
 
 log = get_logger(__name__)
 
@@ -59,6 +63,10 @@ celery_app.conf.update(
         "daily-sales-report": {
             "task": "app.tasks.daily_sales_report",
             "schedule": crontab(hour=REPORT_HOUR, minute=REPORT_MINUTE),
+        },
+        "reconcile-payment-mismatches": {
+            "task": "app.tasks.reconcile_payment_mismatches",
+            "schedule": RECONCILE_INTERVAL_S,
         },
     },
 )

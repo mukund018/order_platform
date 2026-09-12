@@ -94,3 +94,12 @@ def test_rejects_impossible_probability_mix() -> None:
 def test_rejects_inverted_latency_bounds() -> None:
     with pytest.raises(ValueError, match="GATEWAY_LATENCY_MS_MAX"):
         make_settings(GATEWAY_LATENCY_MS_MIN=200, GATEWAY_LATENCY_MS_MAX=100)
+
+
+def test_rejects_a_gateway_latency_ceiling_above_what_any_caller_would_wait() -> None:
+    """INC-004: a gateway that can legitimately outlast orders-service's own
+    PAYMENTS_TIMEOUT_S (3.0s default) guarantees some rate of "charged but recorded
+    FAILED" - regardless of which service's timeout you look at, that combination can
+    only produce mismatched charges. This must fail at startup, not in production."""
+    with pytest.raises(ValueError, match="GATEWAY_LATENCY_MS_MAX"):
+        make_settings(GATEWAY_LATENCY_MS_MIN=50, GATEWAY_LATENCY_MS_MAX=4200)

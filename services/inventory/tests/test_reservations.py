@@ -56,6 +56,32 @@ def test_reserve_is_all_or_nothing(
     assert _rows(session) == []
 
 
+def test_reserving_exactly_the_last_unit_succeeds(
+    client: TestClient, session: Session, make_product: Callable[..., Product]
+) -> None:
+    """INC-006: the conditional UPDATE guard was `stock > qty` instead of `stock >=
+    qty`, so a request for exactly what remained matched zero rows and was rejected as
+    out of stock. Every SKU eventually strands its last unit, forever - this is the
+    boundary that bug lived in."""
+    product = make_product("SKU-0007", stock=1)
+
+    response = _reserve(client, [{"sku": "SKU-0007", "qty": 1}])
+
+    assert response.status_code == 201
+    assert _stock(session, product) == 0
+
+
+def test_reserving_one_more_than_available_is_still_rejected(
+    client: TestClient, session: Session, make_product: Callable[..., Product]
+) -> None:
+    product = make_product("SKU-0007", stock=1)
+
+    response = _reserve(client, [{"sku": "SKU-0007", "qty": 2}])
+
+    assert response.status_code == 409
+    assert _stock(session, product) == 1
+
+
 def test_out_of_stock_names_the_sku_and_the_numbers(
     client: TestClient, make_product: Callable[..., Product]
 ) -> None:

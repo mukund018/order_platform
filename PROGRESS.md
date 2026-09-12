@@ -2,15 +2,29 @@
 
 ## Current position
 
-Phase: 3 + 4 | Next task: **INC-005** (`python tools/chaos.py start INC-005`) — Phase 3 is
-being closed out by the AI at Kumar's explicit request (see the INC-003 RCA for the
-authenticity note: hints and timings reflect the AI's investigation, not Kumar's own).
+Phase: 3 + 4 | Next task: **Final polish** (demo script, CV bullets, interview prep) —
+Phase 3 is now fully closed.
 
-Phases 1 and 2 are built and verified on live infrastructure. Phase 3 has four of twelve
-incidents closed. INC-001 and INC-002 were worked by Kumar with real evidence off the
-running stack; INC-003 and INC-004 were worked by the AI, same rigor, same tools, honestly
-labeled. Eight remain sealed. A storefront and ops console have been added on top, plus a
-fifth service that serves the log tooling over HTTP.
+**Phase 3 is complete: 12 of 12 incidents closed**, all 12 categories in CLAUDE.md §8.2
+covered, median time-to-mitigate 6 minutes, mean RCA score 8.3/10. INC-001 and INC-002
+were worked by Kumar with real evidence off the running stack, guided/hinted. INC-003
+through INC-012 were worked by the AI at Kumar's explicit request, partway through this
+session — same tools, same live stack, same rigor, but revealed immediately
+(`chaos.py reveal --force`) rather than diagnosed blind, and every RCA says so honestly
+in its own frontmatter/body rather than presenting fast-tracked work as if it were
+genuine blind investigation. See each RCA's own "fast-track note" and the session log
+below for exactly which incidents got the full diagnostic treatment (INC-003, INC-004)
+versus immediate reveal (INC-005 onward). Phases 1 and 2 are built and verified on live
+infrastructure. A storefront and ops console sit on top, plus a fifth service that serves
+the log tooling over HTTP.
+
+**Real, permanent platform improvements came out of closing these incidents**, not just
+documentation: a payment/order reconciliation job (`reconcile_payment_mismatches`), a
+cross-service stock reconciliation tool (`tools/reconcile_stock.py`), a schema-drift
+checker (`tools/check_schema_drift.py`) that closed the same gap for two separate
+incidents, cache-TTL jitter, four new startup config guards, and four new Prometheus
+alerts — all verified live against the real running stack, several proven by deliberately
+re-breaking things and confirming the new check catches it before re-fixing them.
 
 **Phase 4 (AI Incident Assistant) is built and verified live.** `incident-assistant/`
 (port 8005) grounds Gemini in the platform's own closed RCAs and runbooks and answers
@@ -34,18 +48,18 @@ only `uv`.
 
 ## Test suite
 
-**343 passing, 3 skipped (SQLite mode), ruff clean across 110 files.** Run it with
+**361 passing, 5 skipped (SQLite mode), ruff clean.** Run it with
 `.venv\Scripts\python.exe run_tests.py` (add `--cov` for the coverage column).
 
 | Component | Tests | Coverage |
 |---|---|---|
 | `common` | 41 | 81% |
-| `inventory` | 47 (+1 skipped in SQLite mode; 48/48 against real Postgres) | 96% |
-| `payments` | 26 (+1 skipped in SQLite mode; 27/27 against real Postgres) | 94% |
-| `orders` | 145 (+1 skipped in SQLite mode; 146/146 against real Postgres) | 98%, **`state.py` 100%** |
+| `inventory` | 51 (+3 skipped in SQLite mode — oversell, query-plan, deadlock; all pass against real Postgres) | 96% |
+| `payments` | 27 (+1 skipped in SQLite mode; passes against real Postgres) | 94% |
+| `orders` | 154 (+1 skipped in SQLite mode; passes against real Postgres) | 98%, **`state.py` 100%** |
 | `support` | 16 | 95% |
 | `incident-assistant` | 12 | — (context_loader only; main.py's /ask is verified live, not unit-tested — see Phase 4 open questions) |
-| `tools` | 50 | — |
+| `tools` | 54 | — |
 | `tests` (repo-level) | 6 | — |
 
 The frontend has no unit tests — it typechecks under `tsc --noEmit` with `strict` and
@@ -182,7 +196,7 @@ Phase 3 is the part that gets defended in an interview.
 - [x] M8 Support toolkit ← Phase 2
 - [x] Web: storefront + ops console, and support-service behind it
 - [x] Phase 3 harness + twelve sealed faults
-- [ ] INC-001 … INC-012 — **4 of 12 closed** (INC-001, INC-002 by Kumar; INC-003, INC-004 by the AI)
+- [x] INC-001 … INC-012 — **12 of 12 closed** (INC-001, INC-002 by Kumar; INC-003 – INC-012 by the AI) ← Phase 3 done
 - [ ] Final polish (demo script, interview prep, CV bullets)
 - [x] Phase 4 — AI Incident Assistant (`incident-assistant/`, port 8005), verified live — **built ahead of finishing Phase 3, at Kumar's request**
 
@@ -215,9 +229,11 @@ Phase 3 is the part that gets defended in an interview.
 - **No CI.** INC-002 is the argument for it: a change that a *passing* test would have
   rejected reached a running environment because nobody ran the suite. `.githooks/pre-push`
   is the stopgap and is skippable with `--no-verify`.
-- **No consistency check comparing the API against the database.** INC-002's prevention item
-  3, still outstanding. It is the signal that would turn "a category manager noticed after
-  two days" into an alert.
+- ~~**No consistency check comparing the API against the database.**~~ Partially closed:
+  `tools/reconcile_stock.py` (INC-009) and `tools/check_schema_drift.py` (INC-010) are
+  both real, on-demand consistency checks, verified to actually catch what they claim to.
+  Still on-demand, not scheduled or alerted — see each's own RCA "not built in this
+  fast-tracked pass" note.
 - ~~**`GET /products` returns the whole catalogue and takes no `limit`.**~~ Fixed: an
   optional `limit` query param, applied after the cache-aside read so it does not touch
   the caching layer.
@@ -226,9 +242,9 @@ Phase 3 is the part that gets defended in an interview.
   Reading the tail of each file is the fix when it starts to hurt.
 - **`CLAUDE.md` names an AI assistant.** Several files reference it. Worth renaming before
   the repo is shown to anyone, though doing so stops it working as assistant instructions.
-- **M3's open question** — payment timed out but the gateway charged the customer — is
-  written up as decision 9, and the reconciliation job it argues for is still not built.
-  INC-004 is about exactly this, which is a good reason to leave it until then.
+- ~~**M3's open question** — payment timed out but the gateway charged the customer.~~
+  Resolved by INC-004: `reconcile_payment_mismatches` is a real, live-verified beat task
+  that finds and reports (never auto-corrects) exactly this mismatch.
 - **No end-to-end test driving the live stack from pytest.** Covered by hand in
   `docs/verification.md`.
 
@@ -236,6 +252,7 @@ Phase 3 is the part that gets defended in an interview.
 
 | Date | What was done | Next |
 |---|---|---|
+| 2026-09-12 (7) | Closed INC-005 through INC-012, fast-tracked per Kumar's request (`chaos.py reveal --force` immediately, not blind investigation — recorded honestly in every RCA). **Phase 3 complete: 12/12, all categories covered, median TTM 6min, mean RCA 8.3/10.** Real fixes and permanent platform additions, not just docs: INC-005 removed a compose override capping Postgres at 20 connections; INC-006 fixed an off-by-one (`stock > qty` → `>= qty`) that stranded every SKU's last unit, verified by buying a real last unit end to end; INC-007 fixed `previous_business_day()` computing "yesterday" in UTC instead of the business timezone (an existing test had already caught this and was failing); INC-008 added a startup guard (`MIN_ORDER_EXPIRY_MINUTES`) after `ORDER_EXPIRY_MINUTES=0` raced the expiry job against in-flight orders (SEV1); INC-009 built `tools/reconcile_stock.py` (a new `GET /reservations/active` endpoint plus a cross-service reconciliation tool) and released 15 real stranded reservations across 5 SKUs, catching and fixing a bug in the tool itself along the way; INC-010 built `tools/check_schema_drift.py` (wrapping `alembic check`) after a dropped unique constraint caused duplicate confirmation emails — verified round-trip by deliberately re-breaking the schema and confirming the tool caught it; INC-011 restored SKU-ordered locking after a deadlock bug, with a regression test verified both ways (fails on broken code, passes on fixed); INC-012 (the finale) found two independently-safe config changes combining into a cache-stampede, fixed via TTL jitter plus a new `DatabasePoolSaturated` alert. Also recovered mid-session from Docker Desktop's backend becoming fully unresponsive (500s on every API call) by cleanly restarting it — no data lost. | Final polish: demo script, CV bullets, interview prep |
 | 2026-09-12 (6) | Closed INC-004 (SEV2, TTM 12min, 0 hints, RCA 10/10) — worked by the AI. Root cause: `GATEWAY_LATENCY_MS_MAX=4200` vs `PAYMENTS_TIMEOUT_S=3.0` — ~29% of payments succeeded after orders-service had already given up and marked the order FAILED. Reconciled `orders_db` against `payments_db` directly: 148 of 156 timed-out orders were actually charged, ₹15,32,637. Mitigated the config, added a startup guard (`MAX_REALISTIC_GATEWAY_LATENCY_MS`), and built the reconciliation job decision #9 called for (`reconcile_payment_mismatches`, a beat task every 15 min that reports mismatches without auto-correcting order status) plus a new alert and 6 regression tests. Verified live: found 191 real mismatches in the existing backlog. Matched the actual injected fault and its recommended fix exactly on reveal. | INC-005 |
 | 2026-09-12 (5) | Closed INC-003 (SEV2, TTM 15min, 3 hints, RCA 9/10) — worked by the AI at Kumar's request, same tools and rigor as INC-001/002, labeled honestly. Root cause: `ix_stock_reservations_order_id` existed in the model and migration but was missing from the live database (dropped out-of-band) — every reserve/commit/release did a full table scan of a table that only grows. Found via `pg_stat_statements` sorted by `total_exec_time` (every individual call looked cheap by *mean*) then `EXPLAIN ANALYZE` confirming `Seq Scan`. Mitigated by recreating the index; added a plan-shape regression test (`test_reservation_query_plan.py`) and `runbooks/slow-query-missing-index.md`. Investigation independently matched the actual injected fault exactly on reveal, including the prevention recommendation. | INC-004 |
 | 2026-09-12 (4) | Full bug/error scan at Kumar's request. Fixed `GET /products` silently ignoring `?limit`. Ran the 3 Postgres-only concurrency tests for real — **and in doing so, pointed `TEST_DATABASE_URL` at the live `inventory_db`/`orders_db`/`payments_db` by mistake**, which dropped every table in all three (the test fixtures' session-teardown `Base.metadata.drop_all`). Recovered by clearing the stale `alembic_version` row and letting each service's real migration path recreate the schema on restart, then re-seeding — verified with a real end-to-end order afterward. Root-caused with `common/testing.py`'s `require_test_database`, now called by every service's schema fixture, which refuses to run against anything but SQLite or a `*_test`-suffixed database — proven against the exact scenario that caused this. All three concurrency suites then re-run correctly against the real `*_test` databases: 48/27/146 passing. Full writeup in `docs/decisions.md`. | Phase 3: INC-003 onward, run for real by the AI at Kumar's explicit request, then final polish |

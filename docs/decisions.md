@@ -319,7 +319,7 @@ even if you cheated. The code faults are committed under one neutral message,
 
 ## Later — noted, not built
 
-Out of scope per CLAUDE.md section 10, written down so the reasoning is not lost:
+Out of scope for this project, written down so the reasoning is not lost:
 
 - **Authentication.** Every endpoint is unauthenticated. Real intake would need at least
   a service token between orders and its two dependencies.

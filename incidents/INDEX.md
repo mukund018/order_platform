@@ -15,7 +15,7 @@ Phase 3 log. One row per incident, filled in when the RCA is scored.
 
 ## Category coverage
 
-Target: at least 9 of the 12 categories in CLAUDE.md section 8.2.
+Target: at least 9 of the 12 fault categories in the Phase 3 plan.
 
 | # | Category | Covered by |
 |---|---|---|

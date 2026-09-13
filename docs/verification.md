@@ -1,6 +1,6 @@
 # Verification
 
-Every acceptance criterion from CLAUDE.md section 7, as a command you can run and a
+Every acceptance criterion from the project plan, as a command you can run and a
 result you can check. Work down the list; each step assumes the ones above it passed.
 
 On Windows use `curl.exe`, not `curl` — in PowerShell `curl` is an alias for
@@ -34,7 +34,7 @@ against that service's models. The per-service suites build their schema with
 container fail to start on deploy. It also boots each service from `.env.example` to prove
 no setting was renamed without the example being updated.
 
-Per-service coverage (CLAUDE.md wants ≥ 70%):
+Per-service coverage (target ≥ 70%):
 
 ```powershell
 cd services\orders

@@ -7,7 +7,7 @@ Phase: 3 | Milestone: INC-001 not started | Next task: fix
 `git init`, then INC-001.
 
 Phases 1 and 2 were built in one pass rather than milestone by milestone, so the list
-below is ticked against the acceptance criteria in CLAUDE.md section 7, not against the
+below is ticked against the acceptance criteria in the project plan, not against the
 order the work actually happened in.
 
 **2026-09-12: Docker installed, stack run for the first time, `docs/verification.md`
@@ -57,7 +57,7 @@ Target was ≥ 70% per service with the state machine near 100%. Both met.
 
 ## Python focus areas (from M0 diagnostic)
 
-**Not done.** The M0 diagnostic in CLAUDE.md section 7 — eight exercises on
+**Not done.** The M0 diagnostic from the project plan — eight exercises on
 comprehensions, dataclasses, custom exceptions, type hints, context managers, decorators,
 async/await and reading a traceback — has not been worked through. Worth doing before
 Phase 3, since Phase 3 is the part that gets defended in an interview.
@@ -105,7 +105,7 @@ pre-fix behaviour.
 
 So the test needs rewriting to assert what the service actually guarantees: one order row,
 one `reserve` call, one `charge` call, one winner with a 201, one loser with a
-`ConflictError` carrying `ORDER_IN_PROGRESS`. Kumar writes it (CLAUDE.md §0.1). Worth
+`ConflictError` carrying `ORDER_IN_PROGRESS`. Kumar writes it. Worth
 thinking about first: *is* 409 the right answer for a client that simply retried after a
 network blip, and what would the alternative cost?
 
@@ -191,10 +191,6 @@ Each has a regression test.
 - **`GET /products` returns the whole catalogue and takes no `limit`.** FastAPI ignores
   undeclared query parameters, so `?limit=3` silently returns all 50 instead of failing.
   Harmless at this size; a decision to make before the catalogue grows.
-- **`CLAUDE.md` names an AI assistant.** Four files reference it (`PROGRESS.md`,
-  `docs/decisions.md`, `docs/verification.md`, `incidents/INDEX.md`). Worth renaming
-  before this repo is shown to anyone, though doing so stops it working as assistant
-  instructions.
 - M3's open question — payment timed out but the gateway charged the customer — is written
   up as decision 9, but the reconciliation job it argues for is not built. Deliberate gap,
   and a good thing to be asked about.

@@ -50,7 +50,7 @@ only `uv`.
 
 ## Test suite
 
-**361 passing, 5 skipped (SQLite mode), ruff clean.** Run it with
+**364 passing, 5 skipped (SQLite mode), ruff clean.** Run it with
 `.venv\Scripts\python.exe run_tests.py` (add `--cov` for the coverage column).
 
 | Component | Tests | Coverage |
@@ -60,9 +60,9 @@ only `uv`.
 | `payments` | 27 (+1 skipped in SQLite mode; passes against real Postgres) | 94% |
 | `orders` | 154 (+1 skipped in SQLite mode; passes against real Postgres) | 98%, **`state.py` 100%** |
 | `support` | 16 | 95% |
-| `incident-assistant` | 12 | — (context_loader only; main.py's /ask is verified live, not unit-tested — see Phase 4 open questions) |
-| `tools` | 54 | — |
-| `tests` (repo-level) | 6 | — |
+| `incident-assistant` | 12 | 75% (context_loader only; main.py's /ask is verified live, not unit-tested — see Phase 4 open questions) |
+| `tools` | 57 (+3 for the log-tail-window fix) | 68% |
+| `tests` (repo-level) | 6 | 19% |
 
 The frontend has no unit tests — it typechecks under `tsc --noEmit` with `strict` and
 `noUncheckedIndexedAccess`, and is exercised end to end against the live stack. That is a
@@ -249,9 +249,13 @@ Phase 3 is the part that gets defended in an interview.
 - ~~**`GET /products` returns the whole catalogue and takes no `limit`.**~~ Fixed: an
   optional `limit` query param, applied after the cache-aside read so it does not touch
   the caching layer.
-- **support-service reads every log line on every request.** Fine at 17k lines and ~0.5s;
-  it will not be at 500k. `SUPPORT_MAX_RECORDS` trims *after* reading, which does not help.
-  Reading the tail of each file is the fix when it starts to hurt.
+- ~~**support-service reads every log line on every request.**~~ Fixed: `read_records` now
+  takes a `tail_bytes` window and `support-service` defaults to 20MB/file
+  (`SUPPORT_LOG_TAIL_BYTES`), seeking to the end of each file instead of reading it from the
+  start — found live when four log files past 280k lines combined took `/overview` from
+  instant to 15–50+ seconds, entirely inside the read, with every dependency it calls still
+  answering in under half a second. `tools/logtool.py`'s CLI keeps the old unbounded default
+  on purpose, since a person running it by hand is explicitly asking for full history.
 - **`CLAUDE.md` names an AI assistant.** Several files reference it. Worth renaming before
   the repo is shown to anyone, though doing so stops it working as assistant instructions.
 - ~~**M3's open question** — payment timed out but the gateway charged the customer.~~
@@ -264,6 +268,7 @@ Phase 3 is the part that gets defended in an interview.
 
 | Date | What was done | Next |
 |---|---|---|
+| 2026-09-13 (1) | Fixed the last open question from the list below: support-service's `read_records` read every line of every log file on every request, found live when a day's worth of Phase 3 traffic pushed four log files past 280k lines combined and `/overview` went from instant to 15–50+ seconds, entirely inside the read, while every dependency it calls kept answering in under half a second. `read_records` now takes an optional `tail_bytes` and seeks to the end of each file instead of reading it from the start; support-service defaults to 20MB/file (`SUPPORT_LOG_TAIL_BYTES`), while `tools/logtool.py`'s CLI keeps the old unbounded read since a person running it by hand is explicitly asking for full history. Three new tests. Total suite: 364 passing, 5 skipped. | Nothing outstanding except the M0 diagnostic |
 | 2026-09-12 (9) | Wired incident-assistant into the real stack: a proper Dockerfile, a `docker-compose.yml` service (own `.env`, read-only `incidents`/`runbooks` mounts, healthcheck), and an nginx proxy route (`/api/assistant/*`, its own longer timeout for a real third-party call). Added a new **Ask AI** screen to the ops console (`frontend/src/ops/Assistant.tsx`), wired into the router and nav. Found and fixed two real bugs while wiring it up: `requirements.txt` still named the deprecated `google-generativeai` instead of `google-genai`, and its `-e ../common` line never resolved outside the original manual venv setup. Also gave every storefront product a small deterministic SVG icon matched to its name (`frontend/src/lib/icons.tsx`, 15 categories from `tools/seed.py`'s own item list plus a generic fallback) instead of a flat colour swatch — no external image host, nothing that can 404. Verified live end to end: a real query through the browser's own path (nginx → incident-assistant container) correctly identified INC-006's root cause. | Nothing outstanding except the M0 diagnostic |
 | 2026-09-12 (8) | Final polish. `docs/demo.md` (a 5-minute live walkthrough built around re-running INC-001), `docs/cv-bullets.md` (real numbers only, with an explicit authorship-honesty note so nothing implies Kumar solo-diagnosed INC-003–012), and `docs/interview-prep.md` (30 questions, framed as study material to internalize and rephrase, not a script to recite). Also found and fixed a genuinely flaky test introduced during INC-012's fix (exact-equality assertion against a TTL that counts down in real time) — verified the fix with 15 consecutive stress-test runs before trusting it, matching the same rigor applied to every incident's regression test this session. **The project is now complete except the M0 Python diagnostic.** | The M0 diagnostic, whenever Kumar wants to do it |
 | 2026-09-12 (7) | Closed INC-005 through INC-012, fast-tracked per Kumar's request (`chaos.py reveal --force` immediately, not blind investigation — recorded honestly in every RCA). **Phase 3 complete: 12/12, all categories covered, median TTM 6min, mean RCA 8.3/10.** Real fixes and permanent platform additions, not just docs: INC-005 removed a compose override capping Postgres at 20 connections; INC-006 fixed an off-by-one (`stock > qty` → `>= qty`) that stranded every SKU's last unit, verified by buying a real last unit end to end; INC-007 fixed `previous_business_day()` computing "yesterday" in UTC instead of the business timezone (an existing test had already caught this and was failing); INC-008 added a startup guard (`MIN_ORDER_EXPIRY_MINUTES`) after `ORDER_EXPIRY_MINUTES=0` raced the expiry job against in-flight orders (SEV1); INC-009 built `tools/reconcile_stock.py` (a new `GET /reservations/active` endpoint plus a cross-service reconciliation tool) and released 15 real stranded reservations across 5 SKUs, catching and fixing a bug in the tool itself along the way; INC-010 built `tools/check_schema_drift.py` (wrapping `alembic check`) after a dropped unique constraint caused duplicate confirmation emails — verified round-trip by deliberately re-breaking the schema and confirming the tool caught it; INC-011 restored SKU-ordered locking after a deadlock bug, with a regression test verified both ways (fails on broken code, passes on fixed); INC-012 (the finale) found two independently-safe config changes combining into a cache-stampede, fixed via TTL jitter plus a new `DatabasePoolSaturated` alert. Also recovered mid-session from Docker Desktop's backend becoming fully unresponsive (500s on every API call) by cleanly restarting it — no data lost. | Final polish: demo script, CV bullets, interview prep |

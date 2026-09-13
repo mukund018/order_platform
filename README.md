@@ -108,6 +108,13 @@ services' own `/ready` endpoints, and serves the four `logtool` questions over H
 and the CLI call the same functions in `common/logsearch.py`, so the console and the
 terminal can never disagree about what counts as an error.
 
+It reads only the tail of each log file (`SUPPORT_LOG_TAIL_BYTES`, 20MB/file by default),
+not the whole thing — found live after a day of Phase 3 traffic pushed four log files past
+280k lines combined and `/overview` went from instant to 15–50+ seconds, entirely inside
+the log read, with every dependency it calls still answering in under half a second. The
+CLI keeps the old unbounded read, since a person running `logtool.py` by hand is explicitly
+asking for full history.
+
 ---
 
 ## The support toolkit
@@ -209,17 +216,18 @@ tests/        repo-level checks: migrations match models, services boot from .en
 ```
 
 ```
-suite         passed  failed  skipped   cov
--------------------------------------------
-common            38       0        0   81%
-inventory         45       0        1   96%
-payments          26       0        1   94%
-orders           145       0        1   98%
-support           16       0        0   95%
-tools             50       0        0   66%
-repo               6       0        0   20%
--------------------------------------------
-total            326       0        3
+suite                passed  failed  skipped   cov
+---------------------------------------------------
+common                   41       0        0   81%
+inventory                51       0        3   96%
+payments                 27       0        1   94%
+orders                  154       0        1   98%
+support                  16       0        0   95%
+incident-assistant       12       0        0   75%
+tools                    57       0        0   68%
+repo                      6       0        0   19%
+---------------------------------------------------
+total                   364       0        5
 ```
 
 The frontend typechecks and builds as part of its own container: `npm run typecheck`,
